@@ -19,9 +19,9 @@ the same bytes.
 
 | Script | Target | Published |
 |---|---|---|
-| `civitai-declutter.user.js` — **Civitai — media-only feed, icon-only top bar** | civitai.com · civitai.red · civitai.green — feed stripped to the media itself, one icon-only top bar, model pages keep carousel and gallery | _pending_ |
-| `github-pulls-running-checks.user.js` — **GitHub — running checks in the PR hovercard** | github.com — GitHub's own PR hovercard gains a checks section: failed jobs named, running jobs with a live elapsed clock | _pending_ |
-| `google-photos-icon-nav.user.js` — **Google Photos — full-bleed grid, nav in a drawer** | photos.google.com — full-bleed grid on black, top bar reduced to the avatar, Photos' labelled nav held off-canvas as a drawer | _pending_ |
+| `civitai-declutter.user.js` — **Civitai — media-only feed, icon-only top bar** | civitai.com · civitai.red · civitai.green — feed stripped to the media itself, one icon-only top bar, model pages keep carousel and gallery | [![Greasy Fork](https://img.shields.io/greasyfork/v/595761?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595761-civitai-media-only-feed-icon-only-top-bar) [![installs](https://img.shields.io/greasyfork/dt/595761)](https://greasyfork.org/en/scripts/595761-civitai-media-only-feed-icon-only-top-bar) |
+| `github-pulls-running-checks.user.js` — **GitHub — running checks in the PR hovercard** | github.com — GitHub's own PR hovercard gains a checks section: failed jobs named, running jobs with a live elapsed clock | [![Greasy Fork](https://img.shields.io/greasyfork/v/595763?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595763-github-running-checks-in-the-pr-hovercard) [![installs](https://img.shields.io/greasyfork/dt/595763)](https://greasyfork.org/en/scripts/595763-github-running-checks-in-the-pr-hovercard) |
+| `google-photos-icon-nav.user.js` — **Google Photos — full-bleed grid, nav in a drawer** | photos.google.com — full-bleed grid on black, top bar reduced to the avatar, Photos' labelled nav held off-canvas as a drawer | [![Greasy Fork](https://img.shields.io/greasyfork/v/595764?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595764-google-photos-full-bleed-grid-nav-in-a-drawer) [![installs](https://img.shields.io/greasyfork/dt/595764)](https://greasyfork.org/en/scripts/595764-google-photos-full-bleed-grid-nav-in-a-drawer) |
 
 Everything here publishes to **[Greasy Fork](https://greasyfork.org)**. A script
 targeting an adult site belongs on [Sleazy Fork](https://sleazyfork.org) instead
