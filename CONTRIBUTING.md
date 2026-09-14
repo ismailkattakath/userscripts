@@ -174,6 +174,23 @@ set, the banned keys, the 500-character line cap, and version monotonicity.
 7. Confirm the failure mode: break your own selector on purpose and check the
    page renders **stock**, not mangled.
 
+## Publishing a script
+
+The repository is the source; the **Greasy Fork listing is the install
+channel**, because only that copy carries an `@updateURL`.
+
+1. Bump `@version` and add the `CHANGELOG.md` entry.
+2. Write or update `listings/<script>.md` - the listing's Additional info body.
+   Greasy Fork requires a script to be properly described; an undisclosed
+   behaviour is the most common reason a script is taken down.
+3. Post it on [Greasy Fork](https://greasyfork.org) (a script targeting an adult
+   site goes to Sleazy Fork and lives in a different repository). Paste the code,
+   select **Markdown**, paste the listing body.
+4. Add the listing link to the README catalogue row.
+
+Greasy Fork rewrites `@downloadURL`/`@updateURL` to its own copy on upload, which
+is why this repository must not carry them.
+
 ## Commit and PR conventions
 
 - **Subject line**: `<script-name>: what changed` — e.g.
