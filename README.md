@@ -19,9 +19,9 @@ the same bytes.
 
 | Script | Target | Published |
 |---|---|---|
-| `civitai-declutter.user.js` | civitai.com · civitai.red · civitai.green — feed stripped to the media itself, one icon-only top bar, model pages keep carousel and gallery | _pending_ |
-| `github-pulls-running-checks.user.js` | github.com — GitHub's own PR hovercard gains a checks section: failed jobs named, running jobs with a live elapsed clock | _pending_ |
-| `google-photos-icon-nav.user.js` | photos.google.com — full-bleed grid on black, top bar reduced to the avatar, Photos' labelled nav held off-canvas as a drawer | _pending_ |
+| `civitai-declutter.user.js` — **Civitai — media-only feed, icon-only top bar** | civitai.com · civitai.red · civitai.green — feed stripped to the media itself, one icon-only top bar, model pages keep carousel and gallery | _pending_ |
+| `github-pulls-running-checks.user.js` — **GitHub — running checks in the PR hovercard** | github.com — GitHub's own PR hovercard gains a checks section: failed jobs named, running jobs with a live elapsed clock | _pending_ |
+| `google-photos-icon-nav.user.js` — **Google Photos — full-bleed grid, nav in a drawer** | photos.google.com — full-bleed grid on black, top bar reduced to the avatar, Photos' labelled nav held off-canvas as a drawer | _pending_ |
 
 Everything here publishes to **[Greasy Fork](https://greasyfork.org)**. A script
 targeting an adult site belongs on [Sleazy Fork](https://sleazyfork.org) instead
