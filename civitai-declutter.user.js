@@ -343,10 +343,22 @@
        SIBLING of the scrolling column, which is why it survives every route change.
        Identified by being the centered, top-bordered shell child rather than by its
        bg-gray-2/dark:bg-dark-9 pair, which is pure theming and likely to churn.
-       Only rendered for a SIGNED-IN session: logged out the shell has just three
-       children (header, the flex-1 column, a 0×0 absolute helper) and this matches
-       nothing — a no-op, not a misfire. The site footer is nested inside the
-       scrolling column, not here, so it is never caught by this rule. */
+       "Only rendered for a SIGNED-IN session" was true when this was written and
+       is NOT true any more — RE-MEASURED 2026-09-14, signed OUT and with no
+       content blocker, the column has FOUR children and the fourth is this rail,
+       1512x97 and captioned "Close Ad". The rule matches, and hiding it is
+       wanted either way; only the old "no-op when logged out" note was stale.
+       The site footer is nested inside the scrolling column, not here, so it is
+       never caught by this rule.
+
+       KNOWN RESIDUE, and it is the AD STACK's, not ours: while this rail is
+       display:none the ad network keeps re-serving into the hidden box and
+       settles on a TALLER creative, so dropping the rule (a teardown, or an
+       uninstall) reveals a rail that has grown. Measured 2026-09-14 on /images
+       with ONLY this one declaration in a bare <style> and nothing else from
+       this script: 97px stock -> hidden 4s -> 201px on unhide, stable. Nothing
+       in this file sets that height and nothing in teardown can put it back; the
+       page is otherwise byte-for-byte stock (see LIFECYCLE at the top). */
     #main > div > div.relative.flex.justify-center.border-t {
       display: none !important;
     }
