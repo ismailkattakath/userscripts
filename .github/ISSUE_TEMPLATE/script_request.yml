@@ -1,0 +1,62 @@
+name: ✨ Script request
+description: Propose a redesign for a site not covered yet
+labels: ['enhancement', 'needs triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These scripts are **redesigns**, not tweaks — they replace an
+        experience rather than nudge it. A request is much more likely to land
+        if you can say what the page should *feel* like, not only what to hide.
+
+  - type: input
+    id: site
+    attributes:
+      label: Site
+      placeholder: https://example.com
+    validations:
+      required: true
+
+  - type: dropdown
+    id: fork
+    attributes:
+      label: Which fork would this publish to?
+      description: Adult sites go to Sleazy Fork; Greasy Fork rejects them.
+      options:
+        - Greasy Fork (ordinary site)
+        - Sleazy Fork (adult site)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong with the page as it ships
+      description: Be concrete. "Cluttered" is not actionable; "three ad rails and a sticky interstitial push the content grid below the fold" is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What should it become
+      description: The experience you want. Layout, density, what stays, what goes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: keep
+    attributes:
+      label: What must keep working
+      description: Pagination, search, login, playback controls — anything a redesign must not strand.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I checked no existing script here already covers this site
+          required: true
+        - label: I understand a redesign must degrade to the stock page when it cannot apply
+          required: true

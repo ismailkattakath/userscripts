@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # devDependencies only — this repository ships no runtime dependency. Grouped
+  # into one PR a month so a two-line lint bump does not cost a review each time.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      lint-tooling:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+    commit-message:
+      prefix: 'deps'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'
