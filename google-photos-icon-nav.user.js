@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         Google Photos — icon-only nav rail
+// @name         Google Photos — full-bleed grid, nav in a drawer
 // @namespace    kattakath.com
-// @version      4.6.0
+// @version      4.7.0
 // @description  Full-bleed Google Photos: the grid takes the whole window on a black backdrop, the top bar is reduced to the account avatar, and Photos' own labelled nav is held off-canvas as a drawer holding search, Create, Help, Settings and Google apps. Memories row, date headings and the year scrubber are dropped. No breakpoint lifting, so search survives.
 // @author       Ismail Kattakath
 // @license      MIT
-// @homepageURL  https://github.com/kattakath/nix-config
-// @supportURL   https://github.com/kattakath/nix-config/issues
+// @homepageURL  https://github.com/ismailkattakath/userscripts
+// @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        https://photos.google.com/*
 // @run-at       document-start
 // @grant        none
@@ -43,11 +43,13 @@
 //   * The search field is RELOCATED into the drawer rather than hidden. Trusted
 //     click at (150,44) + typed "dog" => input.value === "dog". It works there.
 //
-// @name still says "icon-only nav rail" and is deliberately NOT corrected:
-// Violentmonkey keys an install on @namespace + @name, so renaming it installs a
-// SECOND entry beside the existing one — exactly the two-copy situation the
-// last-in-head stand-down below exists to survive. Renaming is an operator decision
-// that has to be paired with uninstalling the old entry.
+// @name WAS "icon-only nav rail" and said so for four majors, because Violentmonkey
+// keys an install on @namespace + @name: renaming installs a SECOND entry beside the
+// existing one — exactly the two-copy situation the last-in-head stand-down below
+// exists to survive. It was corrected at 4.7.0, when the script moved to a Greasy Fork
+// listing and every install became a fresh one from that page anyway; the old entry
+// has to be uninstalled by hand, once. The name now describes what the script has
+// actually done since the drawer landed: full-bleed grid, nav held off-canvas.
 //
 // Still true, and the reason this file survives Google's churn at all: NOT ONE Google
 // or JSCompiler class name appears below. Every anchor is an ARIA role or an href.
