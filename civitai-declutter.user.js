@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.23.0
+// @version      1.24.0
 // @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -52,10 +52,56 @@
 // so this is constructed, with ONE property: a CSS zoom on `main`, sized so the
 // site's own math lands on k columns whose block fills the width exactly. The
 // site keeps doing the layout; no inline value is fought.
+//
+// LIFECYCLE — one teardown, called at entry. Added 2026-09-14; this file had
+// none, alone in this family. A second copy is reachable in the wild (a Greasy
+// Fork install beside a manual one) and by any agent re-injecting the body, and
+// measured 2026-09-14 on civitai.com/images that second copy produced: 2
+// MutationObservers on body+subtree, 2 click captures, 2 keydown captures, and
+// TWO stacked fullscreen overlays per card click — of which Escape closed one,
+// leaving the page under a dead matte.
+//
+// The contract, matching google-photos-icon-nav and thumbwall:
+//   · ONE flag         `torn`, re-checked inside every coalescing frame. A
+//                      queued requestAnimationFrame OUTLIVES teardown and would
+//                      otherwise rebuild exactly what it just undid.
+//   · ONE controller   every listener is added with { signal }, so teardown is
+//                      one ac.abort() and not a removeEventListener list that
+//                      rots the first time a listener is added and not mirrored.
+//                      The bootstrap listeners (DOMContentLoaded, load) carry it
+//                      too — a copy torn down before it started must not mount.
+//   · NO "already init" flag. An early return would make a re-run a silent
+//                      no-op, which is the exact failure a re-injection test
+//                      exists to catch.
+//   · STOP NEW WORK BEFORE UNDOING THE DOM: torn, abort, disconnect, cancel —
+//                      and only then put nodes back.
+//
+// TWO of the SITE's own nodes are moved or removed by sweep(), and each is
+// recorded with its parent + nextSibling at the moment it is touched, so
+// teardown returns it to where React expects it rather than to a guess:
+//   · the route's scrollable bar, docked into the sub-nav
+//   · footer[data-app-footer], removed outright
+// The footer is restored only while the document holds no other one — React may
+// have mounted a replacement meanwhile, and two footers is mangled, not stock.
+// A recorded parent that is itself DETACHED is still the right home: that tree
+// is the site's, React discarded it, and the live sub-nav returns to stock
+// either way.
 (() => {
   'use strict';
 
-  GM_addStyle(`
+  // Undo a previous copy before this one touches anything. Never an "already
+  // init" early return — see LIFECYCLE above.
+  const TEARDOWN = '__nixCivitaiDeclutterTeardown';
+  if (typeof window[TEARDOWN] === 'function') {
+    try { window[TEARDOWN](); } catch { /* the old copy is already gone */ }
+  }
+
+  let torn = false;
+  const ac = new AbortController();
+  const on = (target, type, fn, opts) =>
+    target.addEventListener(type, fn, { ...opts, signal: ac.signal });
+
+  const SHEET_CSS = `
     /* 1. The header — nav, search, create button, notifications, buzz counter,
        account menu. On request, not a hide-for-decluttering choice like the
        other rules below, but the SAME mechanism: a plain rule beats a JS
@@ -476,7 +522,19 @@
     main {
       zoom: var(--nix-civitai-zoom, 1);
     }
-  `);
+  `;
+
+  // Violentmonkey and Tampermonkey both RETURN the <style> they append, and that
+  // element is the handle teardown removes. The fallback is an identity match on
+  // the exact text this run injected — never a guess at which <style> is ours —
+  // so a manager that returns nothing still gets a clean teardown.
+  const sheet = GM_addStyle(SHEET_CSS);
+  const dropSheet = () => {
+    const el = sheet && sheet.nodeType === 1
+      ? sheet
+      : [...document.querySelectorAll('style')].find((s) => s.textContent === SHEET_CSS);
+    if (el) el.remove();
+  };
 
   // Two ad containers are identifiable only by their own CONTENT, and CSS has no
   // text selector — which is the whole reason this pass is JS:
@@ -519,6 +577,22 @@
     if (el.dataset.nixCivitaiAd === undefined) el.dataset.nixCivitaiAd = '';
   };
 
+  // Where a SITE node was before this script moved or removed it. Parent AND
+  // nextSibling, read at the moment of the move: a parent alone would append,
+  // and "appended to the end of the sub-nav's owner" is not where React left it.
+  let barHome = null;
+  let footerHome = null;
+  const notedHome = (node) => ({ node, parent: node.parentNode, next: node.nextSibling });
+  // insertBefore(node, null) appends, which is exactly right when the recorded
+  // sibling has itself been removed since — the node lands back in its own
+  // parent, last, rather than throwing NotFoundError on a sibling that is no
+  // longer a child.
+  const goHome = (rec) => {
+    if (!rec || !rec.parent) return;
+    const next = rec.next && rec.next.parentNode === rec.parent ? rec.next : null;
+    rec.parent.insertBefore(rec.node, next);
+  };
+
   const sweep = () => {
     for (const img of document.querySelectorAll(PLEA)) {
       // Stop at the first ancestor that RESERVES ad height or owns the pricing
@@ -549,7 +623,13 @@
     // zero error events — the footer lives in the persistent app layout. If
     // the site ever remounts it, the observer below removes it again.
     const footer = document.querySelector(FOOTER);
-    if (footer) footer.remove();
+    if (footer) {
+      // Recorded before the remove, and OVERWRITTEN on each later removal: only
+      // the most recent footer is the one the live tree is missing. An earlier
+      // one React has already abandoned is not ours to put back anywhere.
+      footerHome = notedHome(footer);
+      footer.remove();
+    }
     // This route's horizontal bar → into the sub-nav gap between the (now
     // icon-only) nav links and the settings gear. Stress-tested empirically,
     // not just once, 2026-09-06: 11,000px of scroll (virtualised image
@@ -583,8 +663,15 @@
       }
       if (bar) {
         for (const stale of row.querySelectorAll('[data-nix-civitai-tagbar]')) {
-          if (stale !== bar) stale.remove();
+          if (stale !== bar) {
+            // Evicted: its own feed was unmounted, so its recorded home is a
+            // tree React has already discarded. Drop the record with the node —
+            // a teardown that restored it would resurrect a dead route's bar.
+            if (barHome && barHome.node === stale) barHome = null;
+            stale.remove();
+          }
         }
+        barHome = notedHome(bar);
         bar.dataset.nixCivitaiTagbar = '';
         row.insertBefore(bar, gear);
       }
@@ -673,16 +760,66 @@
     setZoom(k ? zoomFor(k) : 0);
   };
 
-  // Coalesce a mutation burst into one sweep per frame. Cost is honest: the root
-  // is body+subtree because neither container has a measured narrower home yet,
-  // so a scroll through the virtualised feed pays one sweep per frame until it
-  // does. Narrowing the root is the follow-up, and it needs a measurement.
-  let queued = false;
+  // Coalesce a mutation burst into one sweep per frame.
+  //
+  // THE OBSERVER ROOT IS document.body + subtree, AND THAT IS NOW A MEASURED
+  // DECISION, not a pending follow-up. Doctrine here is "childList-only on
+  // head/documentElement; never subtree on a large or virtualised DOM", and
+  // Civitai's feed IS virtualised — so this is the documented exception, and it
+  // earns that by numbers taken 2026-09-14 (throwaway Chromium 152, 1512x900,
+  // signed out, no content blocker, ~2900 nodes under #main).
+  //
+  // STOCK page, three counting observers attached at once, records received:
+  //
+  //   root                        idle 10s     scroll 13.9k px in 5.2s
+  //   body      + subtree             3                1447
+  //   #main     + subtree             2                 563
+  //   .scroll-area + subtree          0                 563
+  //
+  // So 886 of the 1447 (61%) come from OUTSIDE #main. Enumerated: all 201 nodes
+  // outside #main are ad-tech — zero-height divs, tracking pixels (iiq_pixel,
+  // quantserve, ad-score, flashtalking) and cross-origin iframes appended
+  // straight to <body>. Nothing this pass looks for lives there.
+  //
+  // AND NARROWING THE ROOT BUYS NOTHING. Same page, this script injected, sweep
+  // timed at its own entry and exit:
+  //
+  //   /images   root=body   idle: 0 sweeps  ·  scroll: 127 kicks -> 47 sweeps,
+  //                         77.3ms total, p50 1.1, p95 5.8, max 18.8
+  //   /images   root=#main  idle: 0 sweeps  ·  scroll: 129 kicks -> 49 sweeps,
+  //                         71.3ms total, p50 1.3, p95 4.3, max 5.9
+  //   /models   root=body   idle: 0 sweeps  ·  scroll:  47 kicks -> 43 sweeps,
+  //                         40.8ms total, p50 0.8, p95 1.7, max 2.4
+  //   /models   root=#main  idle: 0 sweeps  ·  scroll:  41 kicks -> 41 sweeps,
+  //                         37.7ms total, p50 0.8, p95 1.7, max 2.0
+  //
+  // 61% fewer RECORDS, 0% fewer SWEEPS — because the virtualiser dirties the
+  // feed on the same frames the ad stack dirties <body>, and this coalescer has
+  // already collapsed both into one sweep. 77.3ms of sweep across 5.2s of
+  // continuous hard scrolling is 1.4% of wall clock, and an IDLE feed costs
+  // exactly zero sweeps, not "a sweep per frame" as the old comment here
+  // claimed. The saving is inside the noise; the risk is not:
+  //   · #main would need a fallback branch for a route that has not built it,
+  //   · and the ad slots this pass tags would have to be proven to live inside
+  //     it forever. Measured 2026-09-14 with the ad CDN blocked, the "Become a
+  //     Member to turn off ads today" upsell rendered 3x on /models and every
+  //     instance was inside #main — but the adblock-plea <img> never rendered at
+  //     all in this rig, so half that proof is missing.
+  // Trading a real correctness surface for an unmeasurable gain is the wrong
+  // way round. Re-open this only if a sweep ever costs more than a frame:
+  // /images' max of 18.8ms is the one sample that did, once in 47.
+  //
+  // (#main, main, div.scroll-area and body all kept node identity across
+  // /images -> /models -> /videos -> an image detail page -> Back, so root
+  // choice is not what would make this rot.)
+  let queued = 0;
   const kickSweep = () => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
+    if (torn || queued) return;
+    queued = requestAnimationFrame(() => {
+      queued = 0;
+      // A queued frame outlives teardown, and a sweep after it would re-dock the
+      // bar and re-remove the footer teardown had just put back.
+      if (torn) return;
       sweep();
     });
   };
@@ -723,8 +860,14 @@
     );
 
   let viewEl = null;
+  // Held, not discarded: an IntersectionObserver whose root is removed keeps
+  // observing detached slides until it is collected, and a torn-down copy must
+  // leave nothing that can still call play() on a node the page no longer owns.
+  let viewIo = null;
 
   const closeView = () => {
+    if (viewIo) viewIo.disconnect();
+    viewIo = null;
     if (viewEl) viewEl.remove();
     viewEl = null;
   };
@@ -767,7 +910,7 @@
     const target = viewEl.children[start];
     if (target) target.scrollIntoView({ block: 'start', behavior: 'instant' });
     if (self.IntersectionObserver) {
-      const io = new IntersectionObserver((entries) => {
+      viewIo = new IntersectionObserver((entries) => {
         for (const e of entries) {
           const v = e.target.querySelector('video');
           if (!v) continue;
@@ -775,7 +918,7 @@
           else v.pause();
         }
       }, { root: viewEl, threshold: 0.5 });
-      for (const slide of viewEl.children) io.observe(slide);
+      for (const slide of viewEl.children) viewIo.observe(slide);
     }
   };
 
@@ -789,12 +932,17 @@
 
   // @run-at is document-start so rule 1-3 beat first paint, but this pass needs
   // body — hence the one gate, rather than a second script at document-end.
+  let observer = null;
   const start = () => {
+    // A copy torn down before its bootstrap listener fired must NOT mount. The
+    // { signal } on that listener already removes it, so this is belt to those
+    // braces — and free.
+    if (torn) return;
     sweep();
     // Capture phase, because the card's own <a> would otherwise hand the click
     // to Next's router before it bubbles anywhere useful. Verified: the URL
     // does not change.
-    document.addEventListener('click', (e) => {
+    on(document, 'click', (e) => {
       if (viewEl) return;
       const card = e.target.closest && e.target.closest(CARD_SEL);
       if (!card || !card.closest(FEED)) return;
@@ -802,8 +950,8 @@
       e.preventDefault();
       e.stopPropagation();
       openView(card);
-    }, true);
-    document.addEventListener('keydown', (e) => {
+    }, { capture: true });
+    on(document, 'keydown', (e) => {
       if (!viewEl) return;
       if (e.key === 'Escape') { e.preventDefault(); closeView(); return; }
       const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
@@ -812,17 +960,18 @@
       e.preventDefault();
       e.stopPropagation();
       stepView(dir);
-    }, true);
-    new MutationObserver(kickSweep).observe(document.body, { childList: true, subtree: true });
+    }, { capture: true });
+    observer = new MutationObserver(kickSweep);
+    observer.observe(document.body, { childList: true, subtree: true });
     // Civitai is a Next.js SPA: pushState never re-runs the script, and the
     // observer alone can miss a route that swaps a subtree in one batch.
-    if (self.navigation) self.navigation.addEventListener('navigatesuccess', kickSweep);
+    if (self.navigation) on(self.navigation, 'navigatesuccess', kickSweep);
     // A window resize changes R and nothing in the DOM, so no mutation reports
     // it; the site's own observer is debounced 100ms, so this lands first.
-    window.addEventListener('resize', kickSweep);
+    on(window, 'resize', kickSweep);
   };
   if (document.body) start();
-  else document.addEventListener('DOMContentLoaded', start, { once: true });
+  else on(document, 'DOMContentLoaded', start, { once: true });
 
   // One more sweep at load, plus the masonry's resize: the feed is measured,
   // sizing its container once from the available box, so removing ~200px of
@@ -830,10 +979,54 @@
   // it re-measure. The sweep here is a backstop only — the observer has
   // normally run it long before load fires, which on an ad-heavy page can be
   // many seconds late (measured: not fired 7s in).
-  const kick = () => requestAnimationFrame(() => {
-    sweep();
-    window.dispatchEvent(new Event('resize'));
-  });
+  let kickFrame = 0;
+  const kick = () => {
+    kickFrame = requestAnimationFrame(() => {
+      kickFrame = 0;
+      if (torn) return;
+      sweep();
+      window.dispatchEvent(new Event('resize'));
+    });
+  };
   if (document.readyState === 'complete') kick();
-  else window.addEventListener('load', kick, { once: true });
+  else on(window, 'load', kick, { once: true });
+
+  // ── Teardown ──────────────────────────────────────────────────────────────
+  //
+  // Registered LAST, once everything it closes over exists. Order inside is the
+  // contract: stop new work, then undo. Every step is written to be a no-op
+  // against a page this copy never got far enough to change, because the entry
+  // call above can land on a copy that threw or was torn mid-pass.
+  window[TEARDOWN] = () => {
+    torn = true;
+    ac.abort();                                   // every listener, incl. bootstrap
+    if (observer) observer.disconnect();
+    observer = null;
+    if (queued) cancelAnimationFrame(queued);
+    queued = 0;
+    if (kickFrame) cancelAnimationFrame(kickFrame);
+    kickFrame = 0;
+    closeView();                                  // overlay + its IntersectionObserver
+
+    // Our own marks come off FIRST, while every marked node is still in the
+    // document: the bar goes home next, and a home whose parent React already
+    // discarded is unreachable from document.querySelectorAll afterwards.
+    for (const el of document.querySelectorAll('[data-nix-civitai-ad]')) {
+      el.removeAttribute('data-nix-civitai-ad');
+    }
+    for (const el of document.querySelectorAll('[data-nix-civitai-tagbar]')) {
+      el.removeAttribute('data-nix-civitai-tagbar');
+    }
+
+    goHome(barHome);
+    barHome = null;
+    // Only while nothing else fills the slot — React may have mounted a
+    // replacement footer since, and two footers is mangled, not stock.
+    if (footerHome && !document.querySelector(FOOTER)) goHome(footerHome);
+    footerHome = null;
+
+    root.style.removeProperty(ZOOM_VAR);
+    dropSheet();
+    delete window[TEARDOWN];
+  };
 })();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub — running checks in the PR hovercard
 // @namespace    kattakath.com
-// @version      2.4.0
+// @version      2.5.0
 // @description  Adds a checks section to GitHub's own PR hovercard, anywhere one appears: failed jobs named, jobs in progress with a live elapsed clock, grouped by workflow, with the push/pull_request twins merged into one entry instead of listed twice. Same-origin requests only, no token, no second popup.
 // @author       Ismail Kattakath
 // @license      MIT
@@ -88,6 +88,19 @@
 // Date.now() — no polling, no further requests, and it keeps counting while the
 // card sits open.
 //
+// WHICH RUNNING JOBS GET A CLOCK, measured 2026-09-14 and narrower than it
+// looks. The check-run id is read out of the job link's /job/{id} segment, and
+// only GitHub ACTIONS prints that form. A third-party check — Azure Pipelines on
+// microsoft/vscode, say — links straight to ?check_run_id={id} instead, the
+// /job/ pattern does not match, and the row renders with a glyph and a name but
+// no clock. It is a clean degradation, not a break, and it was left alone here
+// rather than fixed in the same change as the lifecycle work: the id is sitting
+// in that href in plain sight, and ?check_run_id= answers for those checks with
+// the same single relative-time[format="elapsed"] (verified against
+// microsoft/vscode#336110, datetime 2026-09-14T07:08:28Z), so widening the id
+// read is a one-line change — and one that deserves its own measurement pass and
+// its own version, not a ride on this one.
+//
 // STEPS were dropped deliberately. The step inside a running job is reachable —
 // /{owner}/{repo}/actions/runs/{run}/jobs/{id}/steps returns
 // [{name, status, conclusion, number}] — but {id} is an INTERNAL job id, not the
@@ -145,8 +158,60 @@
 // owner, repo and number. So it works on a repo's /pulls, the global dashboard,
 // an issues list, a PR that links another PR, notifications — and stays inert
 // everywhere else, because no PR hovercard means no work.
+//
+// LIFECYCLE. This script carries live state — a delegated listener, two
+// intervals (one of them a clock ticking once a second), in-flight fetches whose
+// answers paint into the DOM, and a section grafted into a host that is GitHub's,
+// not ours. All of it is owned by a single teardown, window.__nixGhChecksTeardown,
+// which is CALLED AT ENTRY before this copy arms anything.
+//
+// There is deliberately no "already init" flag and no early return. An early
+// return makes a re-run a silent no-op, which is the exact failure a re-injection
+// test exists to catch — and a script whose only update path is a manual
+// re-install (no @updateURL, it is banned) cannot afford a no-op.
+//
+// Teardown STOPS NEW WORK BEFORE IT UNDOES THE DOM: it sets `torn`, aborts the
+// controller (which both removes the delegated listener and cancels every fetch
+// in flight), clears both intervals, and only then removes what was injected.
+// The order matters because a fetch's .then() outlives the teardown that
+// cancelled it — measured 2026-09-14 on github.com/home-assistant/core/pulls, a
+// start-time lookup resolving after teardown would otherwise re-stamp a clock
+// cell and restart the ticker on a section that is already gone. Every
+// continuation therefore re-checks `torn` at entry rather than trusting that it
+// cannot still be queued.
+//
+// Undoing the DOM is a plain removal and nothing else: NOT ONE node of GitHub's
+// is moved, reparented or mutated. The section is created by this script and
+// appended to the card's own stack, so removing every [data-nix-ghchecks] node
+// leaves the hovercard byte-identical to stock — verified 2026-09-14 by
+// screenshotting the same card before injection and after teardown.
 (() => {
   'use strict';
+
+  // ---- lifecycle -----------------------------------------------------------
+  // Undo the previous copy first. Reachable in the wild as a Greasy Fork install
+  // sitting beside a manual one, and by any agent re-injecting this body. Two
+  // live copies would mean two mouseover listeners, two watch intervals and two
+  // clock tickers writing the same cells — the section itself would still be
+  // single (ensureSection dedupes on MARK), which is precisely why the duplicate
+  // is invisible until something stalls.
+  if (typeof window.__nixGhChecksTeardown === 'function') {
+    try {
+      window.__nixGhChecksTeardown();
+    } catch {
+      /* the old copy is already gone; arming this one is still the right move */
+    }
+  }
+
+  // Set before anything is undone, and re-checked by every continuation that can
+  // outlive teardown: the two interval callbacks, both promise handlers in
+  // watchFor(), paintElapsed() and ensureTicker().
+  let torn = false;
+  // One controller for the whole copy. The delegated listener is added with its
+  // signal (so teardown is an abort, not a hand-matched removeEventListener with
+  // a capture flag to get wrong) and every fetch carries it too, so a card closed
+  // mid-request cancels the request instead of paying for an answer nobody wants.
+  const ac = new AbortController();
 
   // The only gate. There is no path check: owner, repo and number all come from
   // the hovercard's own target URL, so anywhere GitHub decides to show a PR
@@ -214,7 +279,15 @@
   // colours and the two-column job row are ours, and those use Primer's tokens
   // so the section follows the user's light/dark/auto setting with no palette of
   // its own and no media query.
-  GM_addStyle(`
+  //
+  // The return value is kept so teardown can remove the sheet. Violentmonkey and
+  // Tampermonkey both hand back the <style> element they appended; a manager that
+  // returns nothing leaves it in place, which is why every rule below is scoped
+  // to a .nix-ghchecks-* class this script owns — an orphaned sheet then styles
+  // nothing, rather than leaking a rule onto GitHub's own markup. GM_addStyle is
+  // also what makes @run-at document-start safe: it queues until there is a head
+  // to append to, which a hand-rolled createElement('style') would not.
+  const styleEl = GM_addStyle(`
     .nix-ghchecks-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .nix-ghchecks-wf { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-top: 4px; }
     .nix-ghchecks-wf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -367,9 +440,16 @@
     if (inflight.has(key)) return inflight.get(key);
 
     const pending = (async () => {
+      // Path-relative, so it is same-origin by construction — there is no host to
+      // get wrong and no api.github.com anywhere in this file. credentials is
+      // 'same-origin' to send the session cookie GitHub already set; no token is
+      // read, minted or stored, and nothing is sent anywhere else. The signal is
+      // the copy's own: teardown cancels a request in flight rather than letting
+      // its answer paint into a card that is gone.
       const res = await fetch(`/${owner}/${repo}/pull/${number}/checks`, {
         headers: { Accept: 'application/json' },
         credentials: 'same-origin',
+        signal: ac.signal,
       });
       if (!res.ok) throw new Error(`checks ${res.status}`);
       const html = routeHtml(await res.json());
@@ -398,6 +478,7 @@
     const res = await fetch(`/${ctx.owner}/${ctx.repo}/pull/${ctx.number}/checks?check_run_id=${id}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
+      signal: ac.signal,
     });
     if (!res.ok) return null;
     const html = routeHtml(await res.json());
@@ -429,8 +510,23 @@
   // One interval for the whole document, started on demand and stopping itself
   // as soon as no clock is on screen — a hovercard that closed leaves nothing
   // running behind it.
+  //
+  // That self-stop is only true because GitHub EMPTIES the card host on close
+  // rather than merely hiding it, which was measured rather than assumed
+  // (2026-09-14, github.com/nodejs/node/pulls): on close the single
+  // div.js-hovercard-content drops from 5777 to 135 bytes of innerHTML, loses its
+  // data-hovercard-target-url and goes display:none. Our section goes with it, so
+  // the SINCE cells genuinely vanish and the next tick clears itself. Were GitHub
+  // to start hiding instead of emptying, this loop would run for the life of the
+  // tab — which is the other reason teardown clears it unconditionally rather
+  // than trusting the self-stop.
   let ticker = 0;
   function tick() {
+    if (torn) {
+      clearInterval(ticker);
+      ticker = 0;
+      return;
+    }
     const cells = document.querySelectorAll(`[${SINCE}]`);
     if (!cells.length) {
       clearInterval(ticker);
@@ -440,7 +536,8 @@
     for (const cell of cells) cell.textContent = elapsedText(Number(cell.getAttribute(SINCE)));
   }
   function ensureTicker() {
-    if (!ticker) ticker = setInterval(tick, 1000);
+    if (torn || ticker) return;
+    ticker = setInterval(tick, 1000);
   }
 
   // ---- the section ---------------------------------------------------------
@@ -473,7 +570,10 @@
   // Re-queried from the section rather than closed over, because a re-render
   // between the request and its answer replaces the node.
   function paintElapsed(section, id, since) {
-    if (!since || !section.isConnected) return;
+    // `torn` first: this runs from a fetch's .then(), so it is reachable after
+    // the teardown that cancelled the fetch, and without the guard it would
+    // re-stamp a cell and restart the ticker on a section already removed.
+    if (torn || !since || !section.isConnected) return;
     const cell = section.querySelector(`[${JOB}="${id}"] .nix-ghchecks-elapsed`);
     if (!cell) return;
     cell.setAttribute(SINCE, String(since));
@@ -583,8 +683,9 @@
     let filled = null;
 
     watch = setInterval(() => {
-      if (Date.now() > deadline) {
+      if (torn || Date.now() > deadline) {
         clearInterval(watch);
+        watch = 0;
         return;
       }
       const host = visibleHost(number);
@@ -597,12 +698,16 @@
       if (!section || section === filled) return;
       loadChecks(owner, repo, number).then(
         (groups) => {
-          if (!section.isConnected) return;
+          if (torn || !section.isConnected) return;
           fill(section, groups, { owner, repo, number });
           filled = section;
         },
         (err) => {
-          if (!section.isConnected) return;
+          // The abort teardown fires lands here too. Saying "checks unavailable
+          // (The user aborted a request.)" into a card that is on its way out
+          // would be a lie about GitHub, so `torn` is checked before the message
+          // is written, not only before the node is touched.
+          if (torn || !section.isConnected) return;
           section.textContent = '';
           section.appendChild(el('div', 'f6 color-fg-muted', `checks unavailable (${err.message})`));
           filled = section;
@@ -614,9 +719,15 @@
   // One delegated listener for the life of the document, and nothing fires
   // until a PR hovercard is actually triggered — which is also why this needs no
   // path gate and survives client-side routing for free.
+  //
+  // { capture: true, signal } rather than a bare `true`: the signal is what makes
+  // teardown a single ac.abort() instead of a removeEventListener that has to
+  // repeat both the identical function reference and the capture flag to match —
+  // the classic way a "teardown" silently leaves its listener armed.
   document.addEventListener(
     'mouseover',
     (event) => {
+      if (torn) return;
       const target = event.target instanceof Element ? event.target : null;
       const trigger = target && target.closest('[data-hovercard-url]');
       if (!trigger) return;
@@ -624,6 +735,42 @@
       if (!match) return;
       watchFor(match[1], match[2], match[3]);
     },
-    true,
+    { capture: true, signal: ac.signal },
   );
+
+  // ---- teardown ------------------------------------------------------------
+  //
+  // Stop new work, then undo. Nothing of GitHub's is restored here because
+  // nothing of GitHub's was ever taken: this script only ever APPENDED a section
+  // it created, so removing every [data-nix-ghchecks] node is the whole restore
+  // and the card renders stock.
+  //
+  // Every marked node is removed, not just the one for the PR last hovered. There
+  // is normally at most one — GitHub empties the host on close — but a teardown
+  // that assumed that would be trusting a measurement of someone else's app to
+  // hold, and the cost of the plural form is one querySelectorAll.
+  window.__nixGhChecksTeardown = () => {
+    torn = true;
+    // Removes the delegated listener AND rejects every fetch still in flight, so
+    // no answer arrives for a copy that no longer exists.
+    ac.abort();
+
+    clearInterval(ticker);
+    ticker = 0;
+    clearInterval(watch);
+    watch = 0;
+
+    for (const node of document.querySelectorAll(`[${MARK}]`)) node.remove();
+
+    // The caches hold answers and, in `started`, PROMISES — including ones this
+    // abort just rejected into a permanent null. Dropping them is what stops a
+    // replacement copy inheriting a cached "this job has no start time" for a job
+    // that does.
+    cache.clear();
+    inflight.clear();
+    started.clear();
+
+    if (styleEl && typeof styleEl.remove === 'function') styleEl.remove();
+    delete window.__nixGhChecksTeardown;
+  };
 })();
