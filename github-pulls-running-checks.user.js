@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         GitHub — running checks in the PR hovercard
 // @namespace    kattakath.com
-// @version      2.3.0
+// @version      2.4.0
 // @description  Adds a checks section to GitHub's own PR hovercard, anywhere one appears: failed jobs named, jobs in progress with a live elapsed clock, grouped by workflow, with the push/pull_request twins merged into one entry instead of listed twice. Same-origin requests only, no token, no second popup.
 // @author       Ismail Kattakath
 // @license      MIT
-// @homepageURL  https://gitlab.com/ismailkattakath/nix-personal/-/tree/main/userscripts
-// @supportURL   https://gitlab.com/ismailkattakath/nix-personal/-/issues
+// @homepageURL  https://github.com/ismailkattakath/userscripts
+// @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        https://github.com/*
 // @run-at       document-start
 // @grant        GM_addStyle

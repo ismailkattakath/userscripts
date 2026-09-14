@@ -1,11 +1,12 @@
 // ==UserScript==
-// @name         Civitai — reclaim the fold and the gutters
+// @name         Civitai — media-only feed, icon-only top bar
 // @namespace    kattakath.com
+// @author       Ismail Kattakath
 // @license      MIT
-// @version      1.22.0
+// @version      1.23.0
 // @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
-// @homepageURL  https://gitlab.com/ismailkattakath/nix-personal/-/tree/main/userscripts
-// @supportURL   https://gitlab.com/ismailkattakath/nix-personal/-/issues
+// @homepageURL  https://github.com/ismailkattakath/userscripts
+// @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        *://civitai.com/*
 // @match        *://*.civitai.com/*
 // @match        *://civitai.red/*
