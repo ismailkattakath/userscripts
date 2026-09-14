@@ -1,0 +1,88 @@
+name: 🐛 Bug report
+description: A script misbehaves, mangles a page, or stopped working
+labels: ['bug', 'needs triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before filing:** a script that suddenly does nothing is usually a
+        renamed selector upstream — that is the intended failure mode, and it is
+        still worth reporting. A script that *mangles* the page is a defect.
+
+        **Do not report security issues here.** Use
+        [private reporting](https://github.com/ismailkattakath/userscripts/security/advisories/new).
+
+  - type: input
+    id: script
+    attributes:
+      label: Script
+      description: The filename, and its @version from the manager's dashboard.
+      placeholder: example.user.js @ 1.4.0
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Page URL
+      description: Where it reproduces. Redact anything private.
+      placeholder: https://example.com/some/listing
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What is happening
+      options:
+        - Script does nothing at all
+        - Page is mangled or partly broken
+        - A control on the page no longer works
+        - Script runs on a page it should not
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+      description: What you expected, and what you got.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Scroll to …
+        3. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: DevTools console, with the script enabled. Paste the errors.
+      render: text
+
+  - type: input
+    id: env
+    attributes:
+      label: Browser and manager
+      placeholder: Firefox 133 · Violentmonkey 2.20.0
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I reproduced this with **every other userscript disabled**
+          required: true
+        - label: I am on the latest published version of the script
+          required: true

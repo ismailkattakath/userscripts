@@ -1,0 +1,21 @@
+# Dependencies — devDependencies only; there is no runtime dependency and no build.
+node_modules/
+
+# Lint / tool caches
+.eslintcache
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# There is NO build output in this repository. If you find yourself adding a
+# dist/ ignore, stop and open an issue first — a build step changes what a
+# reviewer is reading relative to what a user executes.
