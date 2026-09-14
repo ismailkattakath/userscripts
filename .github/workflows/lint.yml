@@ -1,0 +1,66 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same PR cancels the first — CI minutes are not free and a
+# superseded run tells you nothing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: eslint + meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so the @version monotonicity check can diff against the
+          # base branch. A shallow clone has no merge base to compare with.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: ESLint
+        run: npm run lint:eslint
+
+      - name: Greasy Fork meta lint
+        run: npm run lint:meta
+
+      - name: '@version monotonicity'
+        if: github.event_name == 'pull_request'
+        run: node scripts/meta-lint.mjs --versions-against origin/${{ github.base_ref }}
+
+  parse:
+    name: node --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # A userscript is copied verbatim into the browser, so a syntax error is a
+      # script that silently never runs. Check it independently of ESLint, which
+      # could in principle be misconfigured into ignoring a file.
+      - name: Parse every userscript
+        run: |
+          shopt -s nullglob
+          files=(*.user.js)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no .user.js files to parse"
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "parsing $f"
+            node --check "$f"
+          done

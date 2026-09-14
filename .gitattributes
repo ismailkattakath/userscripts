@@ -1,0 +1,20 @@
+# Normalise line endings on everything text-like.
+* text=auto eol=lf
+
+# A userscript manager copies the file VERBATIM into extension storage. A CRLF
+# that survives into a committed .user.js travels all the way into the browser,
+# and Greasy Fork's line-length rule counts the stray \r. Pin LF explicitly so a
+# contributor on Windows cannot introduce one through core.autocrlf.
+*.user.js   text eol=lf
+*.mjs       text eol=lf
+*.js        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+
+# Userscripts are JavaScript. Without this, linguist sees the .user.js suffix
+# and the language breakdown on the repository page is wrong.
+*.user.js   linguist-language=JavaScript
+
+# Keep generated/vendored noise out of diffs and the language stats.
+package-lock.json  -diff linguist-generated=true

@@ -1,0 +1,41 @@
+{
+  "name": "@ismailkattakath/userscripts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Userscripts shipping alternative experiences for legacy web applications",
+  "license": "MIT",
+  "author": "Ismail Kattakath <ismail@kattakath.com>",
+  "homepage": "https://github.com/ismailkattakath/userscripts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ismailkattakath/userscripts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ismailkattakath/userscripts/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "npm run lint:eslint && npm run lint:meta",
+    "lint:eslint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:meta": "node scripts/meta-lint.mjs",
+    "lint:versions": "node scripts/meta-lint.mjs --versions-against origin/main"
+  },
+  "devDependencies": {
+    "eslint": "^10.10.0",
+    "eslint-plugin-userscripts": "^0.5.6"
+  },
+  "keywords": [
+    "userscript",
+    "userscripts",
+    "violentmonkey",
+    "tampermonkey",
+    "greasemonkey",
+    "greasyfork",
+    "sleazyfork",
+    "userstyle"
+  ]
+}
