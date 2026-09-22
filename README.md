@@ -22,6 +22,7 @@ the same bytes.
 | `civitai-declutter.user.js` — **Civitai — media-only feed, icon-only top bar** | civitai.com · civitai.red · civitai.green — feed stripped to the media itself, one icon-only top bar, model pages keep carousel and gallery | [![Greasy Fork](https://img.shields.io/greasyfork/v/595761?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595761-civitai-media-only-feed-icon-only-top-bar) [![installs](https://img.shields.io/greasyfork/dt/595761)](https://greasyfork.org/en/scripts/595761-civitai-media-only-feed-icon-only-top-bar) |
 | `github-pulls-running-checks.user.js` — **GitHub — running checks in the PR hovercard** | github.com — GitHub's own PR hovercard gains a checks section: failed jobs named, running jobs with a live elapsed clock | [![Greasy Fork](https://img.shields.io/greasyfork/v/595763?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595763-github-running-checks-in-the-pr-hovercard) [![installs](https://img.shields.io/greasyfork/dt/595763)](https://greasyfork.org/en/scripts/595763-github-running-checks-in-the-pr-hovercard) |
 | `google-photos-icon-nav.user.js` — **Google Photos — full-bleed grid, nav in a drawer** | photos.google.com — full-bleed grid on black, top bar reduced to the avatar, Photos' labelled nav held off-canvas as a drawer | [![Greasy Fork](https://img.shields.io/greasyfork/v/595764?label=Greasy%20Fork)](https://greasyfork.org/en/scripts/595764-google-photos-full-bleed-grid-nav-in-a-drawer) [![installs](https://img.shields.io/greasyfork/dt/595764)](https://greasyfork.org/en/scripts/595764-google-photos-full-bleed-grid-nav-in-a-drawer) |
+| `youtube-share-to-metube.user.js` — **YouTube — Share becomes Store, handing the video to MeTube** | www.youtube.com/watch — the Share button is relabelled Store on a red chip and hands the video to a local MeTube instead of opening the share sheet; sharing moves to the ⋯ menu | — *not yet listed* |
 
 Everything here publishes to **[Greasy Fork](https://greasyfork.org)**. A script
 targeting an adult site belongs on [Sleazy Fork](https://sleazyfork.org) instead
@@ -52,6 +53,15 @@ something real.
   class name.** Framework class names are compiler output and rotate without
   notice. `aria-label` is not an anchor either: it is localised, so a selector
   built on one matches nothing on a non-English UI.
+- **When a control has no anchor, its ICON is one.** A button with no id, no
+  data attribute and only generated classes is not unanchorable: an SVG path's
+  `d` reads the same in every locale, which is exactly what `aria-label` does
+  not. Scope it — the same glyph repeats across a page — and record the match
+  count with the date.
+- **Bind colour to the site's own design token, never a hex.** The brand colour
+  in the logo is rarely the colour in the palette, and a frozen hex stops
+  tracking the site's themes. Read the token off a control that already has the
+  colour you want, and keep the measured value as the `var()` fallback.
 - **`!important` is not the top of the cascade — a running animation is.** A Web
   Animation on `transform` outranks author-important. Move things off-canvas with
   the `translate` longhand (composes) rather than `transform` (competes).

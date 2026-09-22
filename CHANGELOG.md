@@ -20,6 +20,74 @@ Entries are grouped by script. Within a release, use the
 - `automerge` workflow: dependabot's and the owner's pull requests are merged
   by the ismailkattakath-ci GitHub App once both required checks pass.
 
+## youtube-share-to-metube
+
+### [2.0.0] - 2026-09-22
+
+Moved in from a scratch directory and rebuilt to this repository's rules. The
+`@version` continues the 1.x line it arrived on, jumped a major because the
+control it takes over changed.
+
+#### Changed
+
+- **It takes over Share, not Save.** Measured 2026-09-22 on a watch page: at
+  ~1378px Save sits in `#flexible-item-buttons`, and at 758px that container is
+  **empty** - Save is not hidden but absent, materialising only inside the `⋯`
+  popup. A one-click control cannot be one that vanishes at some window widths.
+  Share held `#top-level-buttons-computed` at both widths, so Share is the
+  anchor. The old "pin Save into second place" code is gone with it: it assumed
+  a node that is no longer there.
+- **The anchor is the icon path, not `aria-label`.** The old version matched the
+  accessible name against `"Save"`/`"Save to playlist"`, which this repository
+  bans because it is localised - the script was a silent no-op on any non-English
+  UI. It now matches the share glyph's `d`, which reads the same in every locale.
+  Counted the same day: 6 nodes carry that path document-wide (the bar plus each
+  sidebar `⋮` menu) and exactly **1** inside
+  `ytd-watch-metadata #actions ytd-menu-renderer`, so the scope is load-bearing.
+- **The chip uses YouTube's red token, not `#FF0000`.** The logo red is not this
+  palette's red: the masthead's notification badge computes to `rgb(225, 0, 45)`,
+  declared on `<html>` for both themes as
+  `--yt-sys-color-baseline--red-indicator`. Binding to the token tracks the
+  palette; the hex is the fallback only. Glyph and label keep YouTube's own
+  colours.
+- **`@namespace`, `@homepageURL` and `@supportURL` point at this repository**
+  rather than at MeTube's, and `@author`/`@license` were added.
+
+#### Fixed
+
+- **A rejected add no longer reports success.** MeTube answers a refused URL with
+  **HTTP 200** and `{"status": "error"}` in the body (measured against the live
+  instance, 2026-09-22), so the old status-code test flashed "Sent" on an add
+  that had just failed. The body decides now, and an unparseable body counts as a
+  failure - it means something other than MeTube is answering on that port.
+- **Teardown actually tears down a previous copy.** The old file assigned its own
+  `teardown` to `window` and then called it immediately, which undid nothing:
+  the handle it needed was the *previous* copy's. Entry now calls whatever is
+  already on `window`, and every listener goes through one `AbortController`.
+- **The hover tooltip no longer says "Share".** YouTube's tooltip is not the
+  `title` attribute - one `<yt-tooltip>` hangs off `<ytd-app>` and is reused by
+  every control, refilled from YouTube's own data on hover. It is corrected while,
+  and only while, our button is hovered or focused.
+
+#### Removed
+
+- **`@match https://m.youtube.com/watch*`.** The mobile DOM was never measured,
+  and on a phone `127.0.0.1` is the phone - the request could never reach the
+  machine running MeTube. A match that cannot work only looks supported.
+- `download_type` from the request body; verified not required.
+
+#### Notes
+
+- Verified live on a watch page, 2026-09-22: the scoped anchor matched exactly
+  one button; the chip rendered `rgb(225, 0, 45)`, identical to the notification
+  badge; a capture-phase click was intercepted with **zero** share dialogs
+  opened; and restoring put the glyph, label, `aria-label`, `title` and inline
+  style back, after which the native share sheet opened on the next click.
+- The MeTube leg is exercised by the script's own `GM_xmlhttpRequest`, which only
+  a userscript manager can provide. The endpoint contract itself - `/add`
+  accepting `url`/`quality`/`format`/`auto_start`, and its 200-with-error
+  behaviour - was measured directly against the running instance.
+
 ## civitai-declutter
 
 ### [1.24.0] - 2026-09-14
