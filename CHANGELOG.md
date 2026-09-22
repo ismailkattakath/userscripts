@@ -22,6 +22,44 @@ Entries are grouped by script. Within a release, use the
 
 ## youtube-share-to-metube
 
+### [2.1.0] - 2026-09-22
+
+#### Fixed
+
+- **A plain click stores mp3, not mp4.** 2.0.0 sent `format: "mp4"` and no
+  `download_type`, so every click landed as video regardless of the operator's
+  MeTube default. That default is unreachable: it lives in the `localStorage` of
+  MeTube's web UI on the `127.0.0.1` origin, and no endpoint exposes it
+  (`/config` and `/api/config` both 404; only `/version` and `/history` answer).
+  Leaving the fields out does **not** inherit it either - measured against the
+  live instance, a body of `url` + `auto_start` alone is accepted and recorded as
+  `download_type: "video", format: "any"`. Silence means video. So the format is
+  now stated, and `download_type` - the field 2.1.0's predecessor dropped as "not
+  required" - is exactly the switch that selects audio.
+
+#### Added
+
+- **Alt-click stores the video instead.** A plain click sends
+  `audio`/`mp3`, `Alt` (`⌥`) sends `video`/`mp4`. The chip names which before it
+  sends - **Storing audio** / **Storing video** - so the modifier is never silent
+  about what it just did, and the idle accessible name and tooltip read
+  **Store — Alt (⌥) click for video** so the modifier is discoverable without
+  being guessed. The accessible name opens with the visible label, keeping it a
+  superset of the pixels rather than a second name for the same control.
+
+#### Notes
+
+- **Both paths verified end to end through a real install** - the MeTube leg that
+  2.0.0 could only reason about, because `GM_xmlhttpRequest` exists solely inside
+  a userscript manager. A plain click queued `download_type: "audio"`,
+  `format: "mp3"` and ran to done; an Alt-click queued `"video"` / `"mp4"`.
+- The chip widens while it names the format - 95px at "Store", 145px at
+  "Storing audio". Nothing else in the bar moves: the `⋯` button held `x=718`
+  across every word tested, so the growth is absorbed inside the row rather than
+  shoving its neighbours for the 1.6s a flash lasts.
+
+## youtube-share-to-metube
+
 ### [2.0.0] - 2026-09-22
 
 Moved in from a scratch directory and rebuilt to this repository's rules. The

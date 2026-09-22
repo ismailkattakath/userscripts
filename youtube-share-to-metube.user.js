@@ -3,8 +3,8 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.0.0
-// @description  Turns the Share button on a YouTube watch page into a Store button that hands the video to a MeTube instance on 127.0.0.1:8081 instead of opening the share sheet. Label, tooltip and icon all change — the chip takes YouTube's own red behind a new arrow-into-a-tray glyph — so the control says what it now does, and it reports back on itself: Sending, Stored, Failed. Sharing stays available in the ⋯ menu. One local request, no token, no third-party host, nothing stored.
+// @version      2.1.0
+// @description  Turns the Share button on a YouTube watch page into a Store button that hands the video to a MeTube instance on 127.0.0.1:8081 instead of opening the share sheet. A plain click stores the audio as mp3; Alt-click stores the video as mp4, and the chip names which before it sends, then reports Stored or Failed. Sharing stays in the ⋯ menu. One local request, no token, no third-party host.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        https://www.youtube.com/watch*
@@ -70,9 +70,32 @@
 // res.status and so flashed "Sent" on an add MeTube had just rejected —
 // operation successful, patient died. accepted() reads the body instead, and
 // anything that is not status:"ok" is a failure, an unparseable body included:
-// that means something other than MeTube is answering on the port. The add
-// needs only url, quality, format and auto_start — download_type, which the old
-// version sent, is not required (verified the same day against the instance).
+// that means something other than MeTube is answering on the port.
+//
+// THE FORMAT HAS TO BE SENT. MeTube's own mp3/mp4 preference lives in the
+// localStorage of its web UI, on the 127.0.0.1 origin — a script on
+// youtube.com cannot read it, and there is no server endpoint that exposes it
+// (/config and /api/config both 404; only /version and /history answer).
+// Leaving the fields out does NOT inherit that preference: measured 2026-09-22
+// against the live instance, a body of url + auto_start alone is accepted and
+// recorded as
+//
+//   download_type: "video"   format: "any"   quality: "best"
+//
+// so silence means video, not the user's default. The pair that selects audio
+// is download_type + format together — download_type is the switch, and
+// dropping it, as an earlier pass here did on the grounds that the request
+// worked without it, is what made every click land as mp4.
+//
+// Both paths verified end to end through a real install, 2026-09-22: a plain
+// click queued download_type "audio" / format "mp3" and ran to done; an
+// Alt-click queued "video" / "mp4". That is the whole MeTube leg, exercised
+// through GM_xmlhttpRequest rather than reasoned about.
+//
+// The chip widens while it names what it is sending — 95px at "Store", 145px at
+// "Storing audio", measured the same day. Nothing else in the bar moves: the ⋯
+// button held x=718 across every word tested, so the growth is absorbed inside
+// the row rather than shoving its neighbours for the 1.6s a flash lasts.
 //
 // NO m.youtube.com. The old header matched it. It is dropped for two reasons,
 // the second sufficient on its own: the mobile DOM was never measured, and
@@ -123,7 +146,12 @@
 
   const METUBE = 'http://127.0.0.1:8081/add';
   const QUALITY = 'best';
-  const FORMAT = 'mp4';
+
+  // The two things a click can mean, each carrying the word the chip says while
+  // it sends — so the modifier is never silent about what it just did. See
+  // THE FORMAT HAS TO BE SENT above for why both fields travel together.
+  const AUDIO = { download_type: 'audio', format: 'mp3', word: 'Storing audio' };
+  const VIDEO = { download_type: 'video', format: 'mp4', word: 'Storing video' };
 
   // The watch action bar. #actions and ytd-menu-renderer are structural, not
   // generated — see THE ANCHOR IS GEOMETRY above for the count that makes this
@@ -174,6 +202,13 @@
   const TOOLTIP = 'yt-tooltip';
 
   const LABEL = 'Store';
+
+  // The accessible name while idle, and therefore the tooltip too — retitle()
+  // reads the one to fill the other. It OPENS with the visible label, which is
+  // what keeps the accessible name a superset of the pixels (WCAG 2.5.3) rather
+  // than a different name for the same control.
+  const HINT = `${LABEL} — Alt (⌥) click for video`;
+
   const FLASH_MS = 1600;
 
   // Frames, not milliseconds: the bar is built during the navigation YouTube
@@ -245,10 +280,11 @@
     return null;
   }
 
-  // The word, on the label and the accessible name together. The hover tooltip
-  // follows from the accessible name — see retitle() — so all three agree
-  // without this function knowing the tooltip exists.
-  function dress(button, word) {
+  // `word` is what the chip shows; `spoken` is the accessible name, which the
+  // hover tooltip then follows from — see retitle() — so all three agree without
+  // this function knowing the tooltip exists. They differ only while idle, where
+  // the chip stays one short word and the name carries the modifier hint.
+  function dress(button, word, spoken) {
     const state = original.get(button);
     let node = state && state.labelNode;
     if (!node || !node.isConnected) {
@@ -256,9 +292,11 @@
       if (state) state.labelNode = node;
     }
     if (node) node.nodeValue = word;
-    button.setAttribute('aria-label', word);
-    button.setAttribute('title', word);
+    button.setAttribute('aria-label', spoken || word);
+    button.setAttribute('title', spoken || word);
   }
+
+  const idle = (button) => dress(button, LABEL, HINT);
 
   function flash(button, word) {
     dress(button, word);
@@ -267,7 +305,7 @@
       button,
       setTimeout(() => {
         flashTimer.delete(button);
-        if (!torn && button.isConnected) dress(button, LABEL);
+        if (!torn && button.isConnected) idle(button);
       }, FLASH_MS),
     );
   }
@@ -303,7 +341,7 @@
 
     // A flash in progress owns the label. Overwriting it here would swallow the
     // one piece of feedback the click produces.
-    if (!flashTimer.has(button)) dress(button, LABEL);
+    if (!flashTimer.has(button)) idle(button);
   }
 
   function tipSpan() {
@@ -391,8 +429,8 @@
     }
   }
 
-  function send(url, button) {
-    flash(button, 'Sending');
+  function send(url, button, kind) {
+    flash(button, kind.word);
     // One settle path for all four outcomes. A request in flight OUTLIVES
     // teardown, so `torn` is re-checked here and not only at the call site.
     const settle = (res) => {
@@ -402,7 +440,13 @@
       method: 'POST',
       url: METUBE,
       headers: { 'Content-Type': 'application/json' },
-      data: JSON.stringify({ url, quality: QUALITY, format: FORMAT, auto_start: true }),
+      data: JSON.stringify({
+        url,
+        quality: QUALITY,
+        download_type: kind.download_type,
+        format: kind.format,
+        auto_start: true,
+      }),
       onload: settle,
       onerror: settle,
       ontimeout: settle,
@@ -426,7 +470,12 @@
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    send(url, button);
+
+    // Alt, because it is the only modifier YouTube's action bar leaves alone:
+    // ctrl/cmd and shift are the browser's own open-in-tab and open-in-window,
+    // which a button that is not a link never sees anyway, but reusing them
+    // would still read as a bug the first time someone tried one.
+    send(url, button, event.altKey ? VIDEO : AUDIO);
   }
 
   on(document, 'click', onClick, { capture: true });
