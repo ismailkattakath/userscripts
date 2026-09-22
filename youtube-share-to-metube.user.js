@@ -458,8 +458,9 @@
   // ---- teardown ------------------------------------------------------------
   //
   // Stop new work, then put YouTube's button back exactly as it was found: icon
-  // path, label text, and the two attributes — removed again if they were absent
-  // rather than set to an empty string, which is a different DOM.
+  // path, label text, and the three attributes — aria-label, title and style,
+  // each removed again if it was absent rather than set to an empty string,
+  // which is a different DOM.
   window[TEARDOWN] = () => {
     torn = true;
 
