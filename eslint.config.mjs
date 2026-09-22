@@ -29,6 +29,10 @@ const browser = {
   IntersectionObserver: 'readonly',
   MutationObserver: 'readonly',
   Node: 'readonly',
+  // youtube-share-to-metube walks the Share button's text nodes to find its
+  // label positionally. Reading it by comparing against "Share" would be an
+  // aria-label-class selector: localised, and a no-op on a non-English UI.
+  NodeFilter: 'readonly',
   Response: 'readonly',
   URL: 'readonly',
   atob: 'readonly',
@@ -60,6 +64,10 @@ const browser = {
 // undefined at runtime, and no-undef should say so rather than let it through.
 const userscriptManager = {
   GM_addStyle: 'readonly',
+  // youtube-share-to-metube POSTs to MeTube on 127.0.0.1. fetch/XHR cannot:
+  // the page is https and the target is http, so the browser blocks it as mixed
+  // content. GM_xmlhttpRequest is the manager-side path, gated by @connect.
+  GM_xmlhttpRequest: 'readonly',
 };
 
 export default [
