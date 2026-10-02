@@ -1,0 +1,44 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1790652569,
+        "narHash": "sha256-641r7xrlSOHYoktL9/aArPIYNgZJ9eM5URzSEOtPJDY=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b6c8664de9b6cc07fe5666a29f91884ba81197c4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "page-lab": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790930251,
+        "narHash": "sha256-A9049H08kBMmmMe+Lpu4y/p9G1BhOrhKp7r+Vgc42LM=",
+        "owner": "kattakath",
+        "repo": "skills",
+        "rev": "1607d40251a98e7775d6a2df69dedc5782ac4883",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kattakath",
+        "repo": "skills",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "page-lab": "page-lab"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
