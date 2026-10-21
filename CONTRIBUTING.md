@@ -179,14 +179,49 @@ set, the banned keys, the 500-character line cap, and version monotonicity.
 The repository is the source; the **Greasy Fork listing is the install
 channel**, because only that copy carries an `@updateURL`.
 
+### Updating a listed script: merging is publishing
+
 1. Bump `@version` and add the `CHANGELOG.md` entry.
-2. Write or update `listings/<script>.md` - the listing's Additional info body.
-   Greasy Fork requires a script to be properly described; an undisclosed
-   behaviour is the most common reason a script is taken down.
-3. Post it on [Greasy Fork](https://greasyfork.org) (a script targeting an adult
+2. Update `listings/<script>.md` - the listing's Additional info body - if the
+   behaviour changed. Greasy Fork requires a script to be properly described; an
+   undisclosed behaviour is the most common reason a script is taken down.
+3. Merge. Once both checks pass on `main`, the `publish` workflow
+   fast-forwards the `published` branch, and Greasy Fork's webhook syncs every
+   script and listing body that the push modified. There is no step on Greasy
+   Fork.
+
+- **Only modified files sync.** A script the commit did not touch gets no new
+  version entry.
+- **`@version` must go up.** Lint enforces it on pull requests; `publish`
+  checks it again against `published` and fails rather than ship code that
+  installed copies would never pick up.
+
+### Listing a new script: once, by hand
+
+The webhook can update a listing but cannot create one.
+
+1. Give the script its first `@version`, add the `CHANGELOG.md` entry, write
+   `listings/<script>.md`, and merge, so both files are on `published`.
+2. Post it on [Greasy Fork](https://greasyfork.org) (a script targeting an adult
    site goes to Sleazy Fork and lives in a different repository). Paste the code,
    select **Markdown**, paste the listing body.
+3. On the listing's **Admin** page, set the sync URL to
+   `https://raw.githubusercontent.com/ismailkattakath/userscripts/published/<script>.user.js`
+   and choose **Manual**. In the **Default additional info** row - the body you
+   just pasted - set the URL to `…/published/listings/<script>.md`, keep
+   **Markdown** selected, and click **Update and sync now**. Do not use **Add a
+   localized, synced additional info**: that adds a second, per-locale body
+   reading `(Awaiting sync)`. The first push that modifies the script switches
+   it to **Webhook** by itself; Greasy Fork does not offer that choice by hand.
 4. Add the listing link to the README catalogue row.
+
+Renaming a `.user.js` or a listing file breaks its sync: the webhook follows
+only *modified* files, and a rename is an add plus a delete. Update the sync URL
+when you rename.
+
+The webhook is set once for the repository, under **Settings → Webhooks**: the
+payload URL and secret from Greasy Fork's webhook page, content type
+`application/json`, **push events only**.
 
 Greasy Fork rewrites `@downloadURL`/`@updateURL` to its own copy on upload, which
 is why this repository must not carry them.
