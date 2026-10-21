@@ -19,6 +19,9 @@ Entries are grouped by script. Within a release, use the
   issue and pull request templates, and two CI lint gates.
 - `automerge` workflow: dependabot's and the owner's pull requests are merged
   by the ismailkattakath-ci GitHub App once both required checks pass.
+- `publish` workflow: each `main` commit that passes both checks is
+  fast-forwarded onto the `published` branch, which Greasy Fork's webhook syncs
+  from. A version bump ships on merge, with no paste step.
 
 ## youtube-share-to-metube
 
