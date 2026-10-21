@@ -1,0 +1,77 @@
+name: publish
+
+# Greasy Fork syncs every listed script, and its listing body, from the
+# `published` branch through its GitHub webhook. This job fast-forwards
+# `published` to each `main` commit whose lint run passed, so nothing reaches
+# Greasy Fork until both checks are green.
+#
+# Why a branch and not GitHub Releases: Greasy Fork's release handler re-syncs
+# EVERY script whose sync URL points at this repository, saving a duplicate
+# same-version entry in the history of each one that did not change. Its push
+# handler syncs only the files the pushed commits modified. Lint already
+# requires a higher @version on every .user.js a pull request changes, so a
+# modified script is always a bumped one, and fast-forwarding on every green
+# commit publishes exactly the version bumps.
+#
+# The push uses GITHUB_TOKEN, so it starts no other workflow (automerge skips
+# `published` anyway); repository webhooks still fire.
+on:
+  workflow_run:
+    workflows: [lint]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One fast-forward at a time. A run for an older commit that lands after a
+# newer one finds it already published and exits.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: fast-forward published
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Full history: the version check diffs against `published`, and the
+          # ancestry check needs both commits.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      # Lint checks @version against the base branch only on pull requests, so
+      # a commit pushed straight to main could change a script without bumping
+      # it. Greasy Fork would take the code, but every installed copy would
+      # keep the old one: managers compare @version. Check against what is
+      # already published. The first run has no `published` yet.
+      - name: '@version monotonicity against published'
+        run: |
+          if git rev-parse --verify --quiet refs/remotes/origin/published >/dev/null; then
+            node scripts/meta-lint.mjs --versions-against origin/published
+          else
+            echo "no published branch yet - nothing to compare against"
+          fi
+
+      - name: Fast-forward published
+        run: |
+          set -eu
+          sha=$(git rev-parse HEAD)
+          if git rev-parse --verify --quiet refs/remotes/origin/published >/dev/null &&
+             git merge-base --is-ancestor "$sha" refs/remotes/origin/published; then
+            echo "published already contains $sha"
+            exit 0
+          fi
+          # No --force: if published was ever moved off main's history, this
+          # fails loudly instead of rewriting what Greasy Fork synced from.
+          git push origin "$sha:refs/heads/published"
