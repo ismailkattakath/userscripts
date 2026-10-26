@@ -23,6 +23,20 @@ Entries are grouped by script. Within a release, use the
   fast-forwarded onto the `published` branch, which Greasy Fork's webhook syncs
   from. A version bump ships on merge, with no paste step.
 
+## google-photos-icon-nav
+
+### [4.8.0] - 2026-10-26
+
+#### Fixed
+
+- **Opening a photo or video shows Google's own viewer, unmodified.** The viewer
+  carries its own `[role="main"]` and `[role="menubar"]`, so 4.7.0's shell rules
+  landed on it: both of the viewer toolbar's children were hidden and the bar went
+  click-through, the backdrop turned black, and the burger floated over the photo.
+  Every shell rule is now gated off while the URL has a `/photo/` segment, tracked
+  with the Navigation API's `currententrychange` (pushState included). Closing the
+  viewer restores the full-bleed grid with its scroll position intact.
+
 ## youtube-share-to-metube
 
 ### [2.1.0] - 2026-09-22

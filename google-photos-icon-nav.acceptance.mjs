@@ -252,6 +252,42 @@ export default async function run(t) {
   await t.ev(`document.documentElement.removeAttribute('data-nix-photos-drawer'); true`);
   await navX(t);
 
+  // ---- the item viewer renders STOCK, and closing it restores the shell --------------
+  // 4.7.0 hid both children of the viewer's own [role="menubar"] and floated the burger
+  // over it (measured 2026-10-26). Trusted click to open: opening a photo is a pushState.
+  const tile = await t.rect('a[href*="/photo/"]');
+  t.check('a photo tile exists to open', !!tile && tile.w > 0, tile);
+  if (tile) {
+    await t.click(tile.x + tile.w / 2, tile.y + tile.h / 2);
+    const viewer = await t.settle(
+      () => t.ev(`(()=>{const bars=[...document.querySelectorAll('${BAR}')]
+        .filter(b=>b.checkVisibility());
+        const b=document.querySelector('.nix-photos-burger');
+        return {path:location.pathname,
+          gated:document.documentElement.hasAttribute('data-nix-photos-viewer'),
+          hiddenBarKids:bars.flatMap(x=>[...x.children])
+            .filter(k=>getComputedStyle(k).display==='none').length,
+          clickThrough:bars.some(x=>getComputedStyle(x).pointerEvents==='none'),
+          burger:!!b&&b.checkVisibility()}})()`),
+      { stableFor: 3, accept: (v) => v.path.includes('/photo/') },
+    );
+    t.check('viewer: shell rules and our chrome stand down',
+      viewer.gated && viewer.hiddenBarKids === 0 && !viewer.clickThrough && !viewer.burger,
+      viewer);
+    await t.key('Escape');
+    const back = await t.settle(
+      () => t.ev(`(()=>{const p=document.querySelector('${PANE}');
+        const r=p&&p.getBoundingClientRect();
+        return {path:location.pathname,
+          gated:document.documentElement.hasAttribute('data-nix-photos-viewer'),
+          paneW:r?Math.round(r.width):0,
+          burger:!!document.querySelector('.nix-photos-burger')?.checkVisibility()}})()`),
+      { stableFor: 3, accept: (v) => !v.path.includes('/photo/') },
+    );
+    t.check('viewer closed: full bleed and burger are back',
+      !back.gated && back.paneW === vp.w && back.burger, back);
+  }
+
   // ---- a second copy must not livelock (the Greasy Fork + manual install case) -------
   const t0 = Date.now();
   await t.ev(`(0,eval)(${JSON.stringify(t.source.replace(/^\s*\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==\s*/m, ''))}); true`);
@@ -274,7 +310,8 @@ export default async function run(t) {
       barKids:document.querySelectorAll('${BAR} > *').length,
       ourChrome:document.querySelectorAll('[class*="nix-photos"]').length,
       ourStyle:document.querySelectorAll('style[data-nix-google-photos-rail]').length,
-      attrs:['data-nix-photos-drawer','data-nix-photos-shell','data-nix-photos-tools']
+      attrs:['data-nix-photos-drawer','data-nix-photos-shell','data-nix-photos-tools',
+        'data-nix-photos-viewer']
         .filter(a=>document.documentElement.hasAttribute(a))}})()`);
   t.check('teardown: nav back to stock position',
     after.nav && after.nav.x === stock.nav.x && after.nav.w === stock.nav.w,
