@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Google Photos — full-bleed grid, nav in a drawer
 // @namespace    kattakath.com
-// @version      4.7.0
+// @version      4.8.0
 // @description  Full-bleed Google Photos: the grid takes the whole window on a black backdrop, the top bar is reduced to the account avatar, and Photos' own labelled nav is held off-canvas as a drawer holding search, Create, Help, Settings and Google apps. Memories row, date headings and the year scrubber are dropped. No breakpoint lifting, so search survives.
 // @author       Ismail Kattakath
 // @license      MIT
@@ -139,13 +139,31 @@
   const SHELL_ATTR = 'data-nix-photos-shell';
   const DRAWER_ATTR = 'data-nix-photos-drawer';
   const DRAWER_ID = 'nix-photos-drawer';
-  const ON = ':root[' + SHELL_ATTR + '="on"] ';
+  // The item viewer (a photo or video opened from the grid) renders STOCK. Measured
+  // 2026-10-26 at 1029x806: the viewer carries its OWN `[role="main"]`, wrapper and
+  // `[role="menubar"]`, so the shell's ARIA-anchored rules land on it too — its toolbar
+  // went fixed, transparent and click-through with rule 3 hiding BOTH of its children,
+  // its backdrop went black, and the burger floated over it at (8,8). The viewer box
+  // itself kept its size (an earlier reading of 772 vs 806 was the window resizing
+  // between samples, not this script). Operator's call, 2026-10-26: the viewer is
+  // Google's screen, unmodified.
+  //
+  // Gated by ROUTE, not by DOM: every viewer URL carries a `/photo/<id>` segment
+  // (`/photo/…`, `/u/N/photo/…`, `/album/…/photo/…`, videos included), and the route
+  // is readable without the body subtree observer this file must never add. The
+  // `:not()` takes every ON rule down at once, so nothing is relocated back and forth
+  // per photo: the grid underneath is `visibility:hidden` while the viewer is up
+  // (measured: 0x0), and its full-bleed geometry returns on close with one kick.
+  const VIEWER_ATTR = 'data-nix-photos-viewer';
+  const VIEWER_ROUTE = /\/photo\//;
+  const ON = ':root[' + SHELL_ATTR + '="on"]:not([' + VIEWER_ATTR + ']) ';
 
   // A SECOND gate, for the one rule that hides by elimination (rule 3). Set only once
   // the tools group is provably sitting in our host, so the blanket hide can never
   // outlive the relocation that justifies it. See rule 3 for the failure this closes.
   const TOOLS_ATTR = 'data-nix-photos-tools';
-  const ON_MOVED = ':root[' + SHELL_ATTR + '="on"][' + TOOLS_ATTR + '="moved"] ';
+  const ON_MOVED =
+    ':root[' + SHELL_ATTR + '="on"][' + TOOLS_ATTR + '="moved"]:not([' + VIEWER_ATTR + ']) ';
 
   // Every rule is scoped under an attribute this script sets only once all three
   // anchors above actually resolve. That is the difference between degrading to stock
@@ -341,7 +359,8 @@
 
     // 8. Open state. The drawer floats over photographs, so it needs its own edge —
     //    Photos' nav ships none, having never been an overlay.
-    ':root[' + SHELL_ATTR + '="on"][' + DRAWER_ATTR + '="open"] [role="navigation"]' +
+    ':root[' + SHELL_ATTR + '="on"][' + DRAWER_ATTR + '="open"]:not([' + VIEWER_ATTR + '])' +
+      ' [role="navigation"]' +
       '{transform:none!important;translate:none!important;visibility:visible!important;' +
       'box-shadow:0 0 28px rgba(0,0,0,.34)!important}',
 
@@ -440,6 +459,11 @@
     '.nix-photos-burger:focus-visible{outline:2px solid CanvasText;outline-offset:2px}',
     '.nix-photos-burger span{display:block;width:18px;height:2px;border-radius:2px;' +
       'background:currentColor;box-shadow:0 -6px 0 currentColor,0 6px 0 currentColor}',
+
+    // Our own chrome stands down with the shell rules in the viewer. Hidden rather than
+    // removed: the nodes stay put, so closing the viewer costs no re-append.
+    ':root[' + VIEWER_ATTR + '] .nix-photos-burger,' +
+      ':root[' + VIEWER_ATTR + '] .nix-photos-scrim{display:none!important}',
 
     // Motion is an affordance, not decoration — but it is also a vestibular trigger.
     '@media (prefers-reduced-motion:reduce){' +
@@ -843,8 +867,24 @@
     return true;
   };
 
+  // Returns true on a transition either way: entering re-measures the viewer, and
+  // leaving re-measures the grid back to full bleed — both through the caller's kick.
+  const syncViewer = () => {
+    const inViewer = VIEWER_ROUTE.test(location.pathname);
+    if (inViewer === root.hasAttribute(VIEWER_ATTR)) return false;
+    if (inViewer) {
+      // keepFocus: the burger focus would be restored to is about to be display:none.
+      if (isOpen()) setOpen(false, { keepFocus: true });
+      root.setAttribute(VIEWER_ATTR, '');
+    } else {
+      root.removeAttribute(VIEWER_ATTR);
+    }
+    return true;
+  };
+
   const apply = () => {
     let changed = ensureStyle();
+    if (syncViewer()) changed = true;
 
     const bar = q(SEL_BAR);
     const account = q(SEL_ACCOUNT);
@@ -1004,6 +1044,20 @@
   document.addEventListener('keydown', onKeydown, true);
   document.addEventListener('click', onClick, true);
 
+  // Opening a photo is a pushState, which no event above sees. The Navigation API's
+  // `currententrychange` fires for pushState, replaceState AND back/forward, with no
+  // history patching. Where it is missing, re-check shortly after the click or key
+  // that most likely navigated — late by a frame or two, never wrong for long, since
+  // every apply() pass re-reads the route.
+  const nav$ = typeof window.navigation === 'object' ? window.navigation : null;
+  const onRouteHint = () => window.setTimeout(applyAndKick, 60);
+  if (nav$ !== null && typeof nav$.addEventListener === 'function') {
+    nav$.addEventListener('currententrychange', applyAndKick);
+  } else {
+    document.addEventListener('click', onRouteHint, true);
+    document.addEventListener('keydown', onRouteHint, true);
+  }
+
   // ---- Teardown ---------------------------------------------------------------
   //
   // Undo everything this run did. The hard part is the relocated node — it is
@@ -1019,6 +1073,11 @@
     window.removeEventListener('popstate', armSweep);
     document.removeEventListener('keydown', onKeydown, true);
     document.removeEventListener('click', onClick, true);
+    if (nav$ !== null && typeof nav$.removeEventListener === 'function') {
+      nav$.removeEventListener('currententrychange', applyAndKick);
+    }
+    document.removeEventListener('click', onRouteHint, true);
+    document.removeEventListener('keydown', onRouteHint, true);
 
     homeTools();
     if (appsProxy !== null) appsProxy.remove();
@@ -1036,6 +1095,7 @@
     root.removeAttribute(DRAWER_ATTR);
     root.removeAttribute(SHELL_ATTR);
     root.removeAttribute(TOOLS_ATTR);
+    root.removeAttribute(VIEWER_ATTR);
     if (burger !== null) burger.remove();
     if (scrim !== null) scrim.remove();
     burger = null;
