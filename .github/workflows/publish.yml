@@ -48,7 +48,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
 
       # Lint checks @version against the base branch only on pull requests, so
       # a commit pushed straight to main could change a script without bumping
