@@ -145,6 +145,14 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [1.24.1] - 2026-10-30
+
+#### Changed
+
+- **Header comments only, no behaviour change.** Three comments compared this
+  script with scripts that are not in this repository; those references are
+  gone. The version moves so the published copy matches the source.
+
 ### [1.24.0] - 2026-09-14
 
 #### Added
