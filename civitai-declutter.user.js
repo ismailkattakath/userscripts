@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.24.0
+// @version      1.24.1
 // @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -61,7 +61,7 @@
 // TWO stacked fullscreen overlays per card click — of which Escape closed one,
 // leaving the page under a dead matte.
 //
-// The contract, matching google-photos-icon-nav and thumbwall:
+// The contract, matching google-photos-icon-nav:
 //   · ONE flag         `torn`, re-checked inside every coalescing frame. A
 //                      queued requestAnimationFrame OUTLIVES teardown and would
 //                      otherwise rebuild exactly what it just undid.
@@ -217,8 +217,7 @@
        file, deliberately. Every other rule names a thing to hide, so each new
        piece of furniture Civitai ships renders raw until a rule catches up;
        this one names the two things to KEEP and hides the rest, so a new
-       overlay fails closed. Same flip leolist-listings-only made at v1.51.0,
-       for the same reason.
+       overlay fails closed.
 
        Measured 2026-09-06. One card root serves all three feeds —
        "div.relative.flex.overflow-hidden.rounded-md" (plus theme utilities
@@ -841,10 +840,8 @@
   // load for one picture already on screen. So the click never gets there: it
   // opens a full-viewport slider over the grid, and Escape puts it back.
   //
-  // This is leolist-listings-only's move (v1.34+, v1.43+) — one item per
-  // viewport, y-mandatory scroll snapping, Escape to leave — but built as an
-  // OVERLAY rather than by restyling the feed. There the list itself takes a
-  // class because its rows are ordinary flow content; this masonry is
+  // One item per viewport, y-mandatory scroll snapping, Escape to leave —
+  // built as an OVERLAY rather than by restyling the feed. This masonry is
   // virtualised, every card carrying an inline top/height the site computed,
   // and restyling it in place is the fight that already broke scrolling once
   // (see rule 12b). An overlay leaves that geometry untouched, which is also
