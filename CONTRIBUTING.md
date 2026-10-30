@@ -229,7 +229,7 @@ is why this repository must not carry them.
 ## Commit and PR conventions
 
 - **Subject line**: `<script-name>: what changed` — e.g.
-  `thumbwall: fix xhamster's new id scheme`. For repo-wide changes use a scope
+  `google-photos-icon-nav: leave the photo viewer unmodified`. For repo-wide changes use a scope
   like `ci:`, `docs:` or `lint:`.
 - **Body**: explain *why*, and include the measurement if you changed a selector.
   "What" is visible in the diff; "why" is not.
