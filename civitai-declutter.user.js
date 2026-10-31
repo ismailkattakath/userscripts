@@ -3,8 +3,8 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.26.0
-// @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, the header autohides (back on scroll up), and the footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
+// @version      2.0.0
+// @description  Strips Civitai's image and video feeds to media plus one icon-only top bar, and keeps every other page usable: model, article and challenge cards stay stock and open their own page, a model page keeps Download and Details in a slim sidebar, and the header autohides. Image cards open a fullscreen viewer (arrows, Enter to open, i for the prompt). Surfaces are darkened; ads, footer and announcements go.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        *://civitai.com/*
@@ -52,6 +52,25 @@
 // so this is constructed, with ONE property: a CSS zoom on `main`, sized so the
 // site's own math lands on k columns whose block fills the width exactly. The
 // site keeps doing the layout; no inline value is fought.
+//
+// ROUTE PROFILES (2.0.0). A UX study of every category on 2026-10-31 found
+// one masonry component (the "_queries" element) under /models, /3d-models,
+// /articles, /comics, /challenges, /crucibles, /search, /collections and the
+// home page, not only /images and /videos. Applying the image-feed treatment
+// to all of them broke the site: a card click opened the image viewer instead
+// of the model, article or challenge; model and article cards lost their
+// names; search rendered 0 of 982 results and crucibles one row of 140px
+// tiles (rule 12b turned their grids into one column per card); collections
+// overlapped by 43px. So <html> now carries data-nix-civitai-route, set from
+// location.pathname at entry and on every navigation:
+//   media    /images, /videos   media-only cards (rule 6), 8px grid (rule 12),
+//                               width fit (rule 14)
+//   models   /models, /3d-models   width fit only; cards stay stock
+//   model    /models/<id>       rule 7, plus the slim sidebar
+//   post     /posts/<id>        each image fits the screen height
+//   other    everything else    theme, autohide and the chrome rules only
+// The viewer opens only for a card that links to /images/<id> (videos are
+// image records too), and never for a modified or non-primary click.
 //
 // CLASS-NAME DRIFT, measured 2026-10-31 on civitai.com /images, /videos,
 // /models and /models/3005406. Civitai's build now MINIFIES its CSS-module
@@ -169,7 +188,7 @@
        home — a real absence, not a misfire. Its parent is "justify-between"
        with the nav-links group and a settings icon as the other two children,
        so hiding it just widens that gap; nothing needs to fill the space. */
-    :is([class*="FeedFilters-module"], [class*="_filtersWrapper"]) {
+    html:not([data-nix-civitai-filters]) :is([class*="FeedFilters-module"], [class*="_filtersWrapper"]) {
       display: none !important;
     }
 
@@ -194,10 +213,15 @@
        normally this rule never has anything to correct — it exists for
        whatever flips that preference back (a future default change, a
        different browser/session, an accidental click in that panel). */
-    #main div.sticky.top-0.z-50 .text-base.font-medium.capitalize {
+    /* RE-MEASURED 2026-10-31: the label is now a CLASSLESS span after the
+       link's svg ("a > svg + span"), and Mantine's Button class is gone, so
+       the old pair matched 0 nodes and every label came back. Keyed on the
+       shape instead of a class. The More trigger is a button, not a link, so
+       it keeps its text as before. */
+    main > div.sticky.top-0.z-50 a[href] > svg + span {
       display: none !important;
     }
-    #main div.sticky.top-0.z-50 a.mantine-Button-root {
+    main > div.sticky.top-0.z-50 a[href]:has(> svg + span) {
       padding-left: 12px !important;
       padding-right: 12px !important;
     }
@@ -283,14 +307,14 @@
        mantine Group directly under the masonry's stack, and a feed's tag bar
        in that same position is NOT a Group (it is ".min-w-0.min-h-[26px]"),
        so naming the Group cannot catch the bar this script wants kept. */
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > *:not(.relative.flex-1):not(:is([class*="AspectRatioCard-module"], [class*="_content"])) {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > *:not(.relative.flex-1):not(:is([class*="AspectRatioCard-module"], [class*="_content"])) {
       display: none !important;
     }
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > div.relative.flex-1 > *:not(a),
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > :is([class*="AspectRatioCard-module"], [class*="_content"]) > *:not(a) {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > div.relative.flex-1 > *:not(a),
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > :is([class*="AspectRatioCard-module"], [class*="_content"]) > *:not(a) {
       display: none !important;
     }
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > [class*="mantine-Group-root"] {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > [class*="mantine-Group-root"] {
       display: none !important;
     }
 
@@ -342,20 +366,27 @@
            corner chip, exactly the overlays rule 6 clears on a feed card.
        The version picker is deliberately NOT hidden: sweep() docks it into the
        sub-nav, and its emptied container collapses to 0px on its own. */
-    [class*="mainRegion"] > [class*="rail"] {
+    /* 2.0.0: the sidebar is no longer hidden — Download, the Details panel
+       (type, base model, trigger words, hash) and the license are the reason
+       to open a model page, and hiding the column also left 55% of the width
+       blank (measured 2026-10-31). sweep() slims it by name instead: it finds
+       those three blocks and tags their SIBLINGS data-nix-civitai-off (rule 11),
+       so a block it cannot find stays visible rather than taking the rest
+       with it. The title row stays too, minus its stats and buttons.
+       Discussion moved outside contentCol (measured 2026-10-31), so it and
+       Suggested Resources are found by their headings in the same pass. */
+    html[data-nix-civitai-route="model"] [class*="mainRegion"] > [class*="rail"] {
       display: none !important;
     }
-    [class*="contentCol"] :is([class*="Grid-inner"], [class*="gridInner"]) > :is([class*="Grid-col"], [class*="gridCol"]):not([class*="mainSection"]) {
+    html[data-nix-civitai-route="model"] [class*="_titleWrapper"] > :not(h1),
+    html[data-nix-civitai-route="model"] [class*="_titleWrapper"] ~ *,
+    html[data-nix-civitai-route="model"] [class*="contentCol"] > a,
+    html[data-nix-civitai-route="model"] [class*="contentCol"] > div:not([class]),
+    html[data-nix-civitai-route="model"] [class*="contentCol"] > div.flex.flex-col.gap-4 {
       display: none !important;
     }
-    [class*="contentCol"] > :is([class*="Stack-root"], [class*="_stack"]) > :is([class*="Stack-root"], [class*="_stack"]),
-    [class*="contentCol"] > a,
-    [class*="contentCol"] > div:not([class]),
-    [class*="contentCol"] > div.flex.flex-col.gap-4 {
-      display: none !important;
-    }
-    [class*="mainSection"] [class*="Spoiler-root"],
-    [class*="mainSection"] .relative.w-full > *:not(a) {
+    html[data-nix-civitai-route="model"] [class*="mainSection"] [class*="Spoiler-root"],
+    html[data-nix-civitai-route="model"] [class*="mainSection"] .relative.w-full > *:not(a) {
       display: none !important;
     }
 
@@ -373,6 +404,13 @@
        most durable handle on this page. */
     #main div.announcements {
       display: none !important;
+    }
+    /* Its wrapper ("mb-3 min-h-[203px]") kept 181px of empty band above every
+       feed, home and /challenges once the carousel inside was gone (measured
+       2026-10-31 by three of the four study agents). */
+    main div:has(> div.announcements) {
+      min-height: 0 !important;
+      margin: 0 !important;
     }
 
     /* 10. The bottom ad rail (SEMRUSH etc.) — a direct child of the app shell and a
@@ -395,7 +433,8 @@
        this script: 97px stock -> hidden 4s -> 201px on unhide, stable. Nothing
        in this file sets that height and nothing in teardown can put it back; the
        page is otherwise byte-for-byte stock (see LIFECYCLE at the top). */
-    #main > div > div.relative.flex.justify-center.border-t {
+    #main > div > div.relative.flex.justify-center.border-t,
+    [data-adhesive-ad] {
       display: none !important;
     }
 
@@ -403,7 +442,8 @@
        selector. The pass below only tags; this rule does the hiding. That split is
        the point: React re-creating a tagged node costs one re-tag, never a fight
        over a removal it will just undo. */
-    [data-nix-civitai-ad] {
+    [data-nix-civitai-ad],
+    [data-nix-civitai-off] {
       display: none !important;
     }
 
@@ -434,7 +474,7 @@
        would stay 16. "height: 100%" spends that slack on the image instead —
        the one inline value this file overrides, and a bounded one. Verified
        after: every vertical gap 9px rendered, horizontal 9px, no overlap. */
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > * > .mx-auto.flex.justify-center {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > * > .mx-auto.flex.justify-center {
       gap: 8px !important;
     }
     /* And the columns take the surplus, not the edges. The site sizes the feed
@@ -442,22 +482,30 @@
        320 each, so an 8px gutter leaves 8px per column unspent — measured as a
        24.6px margin against an 8px gap. Letting them flex to equal fractions
        spends it on the cards instead: 330px cards, 8px edges. */
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) .mx-auto.flex.justify-center > div {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .mx-auto.flex.justify-center > div {
       flex: 1 1 0 !important;
       width: auto !important;
     }
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] {
       padding-top: 4px !important;
       padding-bottom: 4px !important;
     }
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > div.relative.flex.overflow-hidden.rounded-md {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > div.relative.flex.overflow-hidden.rounded-md {
       height: 100% !important;
     }
-    #main div.\\@container[style*="padding-inline"] {
+    html[data-nix-civitai-route="media"] #main div.\\@container[style*="padding-inline"] {
       padding-inline: 8px !important;
     }
 
-    /* 12b. /models does not lay its feed out like rule 12's. It ships a spacer
+    /* 12b. REMOVED in 2.0.0 — the grid override below was written for the
+       /models row bands, but search and /crucibles render their results in the
+       same kind of inline grid under the same masonry, and it turned search's
+       grid into 982 columns of 0px (0 of 982 results visible) and crucibles
+       into one row of 140px tiles (measured 2026-10-31). /models cards are
+       stock again in 2.0.0, so the stock 16px gutter and fit()'s zoom already
+       fill the width. The original note follows for the record.
+
+       /models does not lay its feed out like rule 12's. It ships a spacer
        div of the total computed height holding row BANDS that are absolutely
        positioned by inline transform, each a grid of "repeat(k, 320px)" with a
        16px column-gap. So the horizontal gap needs naming here, and inline
@@ -489,13 +537,7 @@
        this rule as it stands. The spacer's fixed height is what makes the feed
        scrollable at all; a tighter row rhythm needs those per-row offsets
        recomputed in JS, not CSS. */
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) div[style*="grid-template-columns"] {
-      grid-template-columns: none !important;
-      grid-auto-flow: column !important;
-      grid-auto-columns: 1fr !important;
-      column-gap: 8px !important;
-    }
-    :is([class*="MasonryContainer-module"], [class*="_queries"]) {
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) {
       width: 100% !important;
     }
     /* A creator cosmetic wraps its card in 6px of padding that a plain card
@@ -504,6 +546,20 @@
        this wrapper's glow; dropping the padding is the rest of that job. */
     :is([class*="CosmeticWrapper-module"], [class*="_cssFrame"]) {
       padding: 0 !important;
+    }
+
+    /* 12d. A post page stacks its images at column width, each 728x1092 in a
+       949px window (measured 2026-10-31 on /posts/31881390), so not one of them
+       is ever seen whole. Each image box carries the site's own inline
+       aspect-ratio, so capping its height lets that ratio set the width. */
+    html[data-nix-civitai-route="post"] main div.relative[style*="aspect-ratio"]:has(> a > img) {
+      max-height: calc(100vh - 96px);
+      margin-inline: auto;
+    }
+    html[data-nix-civitai-route="post"] main div.relative[style*="aspect-ratio"] > a > img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
 
     /* 12c. The in-page viewer's own chrome (the JS that opens it is below).
@@ -536,6 +592,39 @@
       height: 100%;
       object-fit: contain;
       display: block;
+    }
+    /* The i key's generation-data panel. Plain text only: everything in it
+       is the poster's own data, written with textContent, never as markup. */
+    .nix-civitai-info {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      bottom: 16px;
+      width: min(420px, 40vw);
+      overflow-y: auto;
+      z-index: 2147483647;
+      background: rgba(13, 14, 15, 0.92);
+      color: #C1C2C5;
+      border: 1px solid #25262B;
+      border-radius: 12px;
+      padding: 16px;
+      font: 13px/1.5 system-ui, sans-serif;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .nix-civitai-info h4 {
+      margin: 12px 0 4px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #909296;
+    }
+    .nix-civitai-info h4:first-child {
+      margin-top: 0;
+    }
+    .nix-civitai-info p {
+      margin: 0;
+      user-select: text;
     }
 
     /* 13. Surfaces, half as bright. Measured 2026-09-07: the page is Mantine's
@@ -619,7 +708,9 @@
     ':is([class*="MasonryContainer-module"], [class*="_queries"]) .min-w-0.min-h-\\[26px\\]',
     '[class*="scrollContainer"]:is([class*="ModelVersionList-module"], .mantine-ScrollArea-root)',
   ];
-  const CUSTOMIZE_NAV_BTN = 'main > div.sticky.top-0.z-50 button[aria-label="Customize navigation"]'; // measured 2026-09-06
+  // "Customize navigation", and "Customize page and navigation" on the home
+  // page (measured 2026-10-31) — so a prefix, not an exact label.
+  const CUSTOMIZE_NAV_BTN = 'main > div.sticky.top-0.z-50 button[aria-label^="Customize"]';
 
   const tag = (el) => {
     if (el.dataset.nixCivitaiAd === undefined) el.dataset.nixCivitaiAd = '';
@@ -641,7 +732,120 @@
     rec.parent.insertBefore(rec.node, next);
   };
 
+  // ── Route profile ─────────────────────────────────────────────────────────
+  // See ROUTE PROFILES at the top. Read from the URL, never from the DOM, so
+  // it is right before the page has rendered anything.
+  const ROUTE_ATTR = 'data-nix-civitai-route';
+  const routeOf = (path) => {
+    const p = path.replace(/\/+$/, '') || '/';
+    if (p === '/images' || p === '/videos') return 'media';
+    if (p === '/models' || p === '/3d-models') return 'models';
+    if (/^\/models\/\d+/.test(p)) return 'model';
+    if (/^\/posts\/\d+/.test(p)) return 'post';
+    return 'other';
+  };
+  let routeNow = '';
+  const setRoute = () => {
+    const r = routeOf(location.pathname);
+    if (r === routeNow) return;
+    routeNow = r;
+    document.documentElement.setAttribute(ROUTE_ATTR, r);
+  };
+  setRoute();
+
+  const OFF = 'data-nix-civitai-off';
+  const off = (el) => {
+    if (el && !el.hasAttribute(OFF)) el.setAttribute(OFF, '');
+  };
+
+  // The model page's sidebar, slimmed by NAME (measured 2026-10-31 on
+  // /models/362745, a LoRA with 4 trigger words, and /models/4201): its outer
+  // stack holds [a stack of the Create card + the Download card], an Accordion
+  // [Collection, Details, Tensors, About this version], the creator card, the
+  // License group and a /pricing promo. Kept: the card holding the download
+  // link, the Details item, the License group. Every other block on the way
+  // up from those three to the sidebar is tagged off. Nothing is tagged until
+  // the download link exists, so a sidebar still mounting stays stock.
+  const slimModel = () => {
+    for (const sb of document.querySelectorAll('[class*="_sidebarSection"]')) {
+      const dl = sb.querySelector('a[href*="/api/download/models/"]');
+      if (!dl) continue;
+      const keep = [dl.closest('[class*="Card-root"], [class*="_card"]') || dl];
+      for (const item of sb.querySelectorAll('[class*="Accordion-item"], [class*="_item"]')) {
+        const label = (item.querySelector('button, [class*="control"]') || item).textContent.trim();
+        if (/^Details/.test(label)) keep.push(item);
+      }
+      for (const el of sb.querySelectorAll('div')) {
+        if (/^License:/.test(el.textContent.trim()) && el.children.length <= 3) { keep.push(el); break; }
+      }
+      const path = new Set();
+      for (const k of keep) for (let n = k; n && n !== sb; n = n.parentElement) path.add(n);
+      for (const n of path) {
+        const parent = n.parentElement;
+        if (!parent) continue;
+        for (const sib of parent.children) if (!path.has(sib)) off(sib);
+      }
+    }
+    // Headings are the most durable hook for whole sections: Discussion has
+    // moved containers once already (2026-10-31), its heading text has not.
+    for (const h of document.querySelectorAll('main h2')) {
+      const t = h.textContent.trim();
+      if (t === 'Discussion') off(h.closest('div.flex.flex-col.gap-4'));
+      else if (t === 'Suggested Resources') {
+        const feed = h.closest(FEED);
+        off(feed && feed.parentElement);
+      }
+    }
+  };
+
+  // One button of ours beside the gear, shown only where the route HAS the
+  // site's sort/filter group. It toggles an attribute that rule 2 reads, so
+  // the site's own controls appear in place: nothing of the site's is moved.
+  const FILTER_BTN = 'nix-civitai-filters-btn';
+  const FILTER_ATTR = 'data-nix-civitai-filters';
+  const FILTER_SVG = 'M4 5h16l-6 7v6l-4 2v-8z';
+  const filtersButton = (gear, row) => {
+    const has = !!document.querySelector('[class*="_filtersWrapper"], [class*="FeedFilters-module"]');
+    let btn = document.querySelector('.' + FILTER_BTN);
+    if (!has || !row || !gear) {
+      if (btn) btn.remove();
+      root.removeAttribute(FILTER_ATTR);
+      return;
+    }
+    if (btn && btn.parentElement === row) return;
+    if (btn) btn.remove();
+    btn = document.createElement('button');
+    btn.type = 'button';
+    // The gear's own classes, read at runtime, so the button matches whatever
+    // the site's icon buttons look like this build.
+    btn.className = gear.className + ' ' + FILTER_BTN;
+    btn.setAttribute('aria-label', 'Sort and filters');
+    btn.setAttribute('title', 'Sort and filters');
+    btn.setAttribute('aria-pressed', root.hasAttribute(FILTER_ATTR) ? 'true' : 'false');
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '18');
+    svg.setAttribute('height', '18');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linejoin', 'round');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', FILTER_SVG);
+    svg.appendChild(path);
+    btn.appendChild(svg);
+    btn.addEventListener('click', () => {
+      const on = !root.hasAttribute(FILTER_ATTR);
+      if (on) root.setAttribute(FILTER_ATTR, '');
+      else root.removeAttribute(FILTER_ATTR);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }, { signal: ac.signal });
+    row.insertBefore(btn, gear);
+  };
+
   const sweep = () => {
+    setRoute();
     for (const img of document.querySelectorAll(PLEA)) {
       // The 2026-10 placeholder IS a link: img inside a[href="/pricing"]. On a
       // feed that link is a card's only child, so the card goes; on the home
@@ -737,6 +941,8 @@
         row.insertBefore(bar, gear);
       }
     }
+    if (routeNow === 'model') slimModel();
+    filtersButton(gear, row);
     fit();
   };
 
@@ -784,6 +990,10 @@
   };
 
   const fit = () => {
+    // Detail pages carry masonries too (a model's gallery and Suggested
+    // Resources), and so do search, collections and storylines — where a zoom
+    // shrank the page or overlapped the cards. Only the two feed families fit.
+    if (routeNow !== 'media' && routeNow !== 'models') return setZoom(0);
     const feed = document.querySelector(FEED);
     const host = feed && feed.closest(HOST);
     const box = feed && feed.parentElement;
@@ -913,12 +1123,26 @@
   // Only cards whose media is Civitai's own. The feed also carries promo tiles
   // (a "/pricing" card served from /_next/image, measured 2026-09-07) and
   // sliding one of those full-screen would be nonsense.
-  const viewerCards = () =>
-    [...document.querySelectorAll(FEED + ' ' + CARD_SEL)].filter((c) =>
-      CIVITAI_MEDIA.test(mediaSrc(c.querySelector('img, video'))),
-    );
+  const IMAGE_HREF = /^\/images\/(\d+)/;
+  const cardLink = (card) => card.querySelector('a[href^="/images/"]');
+  // The clicked card's OWN feed (home carries eleven), only cards that link to
+  // an image record, in reading order: rows top to bottom, then left to right.
+  // The DOM order is column-major — the first ten cards measured 2026-10-31
+  // all sat in column 1 — so ArrowRight used to walk down one column.
+  const viewerCards = (feed) =>
+    [...feed.querySelectorAll(CARD_SEL)]
+      .filter((c) => cardLink(c) && CIVITAI_MEDIA.test(mediaSrc(c.querySelector('img, video'))))
+      .map((c) => ({ c, r: c.getBoundingClientRect() }))
+      .sort((a, b) => (Math.abs(a.r.top - b.r.top) > 4 ? a.r.top - b.r.top : a.r.left - b.r.left))
+      .map((x) => x.c);
 
   let viewEl = null;
+  let passClick = false;
+  let viewFeed = null;
+  let viewCur = null;
+  let infoEl = null;
+  let moreTimer = 0;
+  const genCache = new Map();
   // Held, not discarded: an IntersectionObserver whose root is removed keeps
   // observing detached slides until it is collected, and a torn-down copy must
   // leave nothing that can still call play() on a node the page no longer owns.
@@ -927,14 +1151,20 @@
   const closeView = () => {
     if (viewIo) viewIo.disconnect();
     viewIo = null;
+    if (moreTimer) clearTimeout(moreTimer);
+    moreTimer = 0;
     if (viewEl) viewEl.remove();
     viewEl = null;
+    viewFeed = null;
+    viewCur = null;
+    infoEl = null;
   };
 
   const slideFor = (card) => {
     const media = card.querySelector('video, img');
     const slide = document.createElement('div');
     slide.className = 'nix-civitai-slide';
+    slide.dataset.href = cardLink(card).getAttribute('href');
     const isVideo = media.tagName === 'VIDEO';
     const node = document.createElement(isVideo ? 'video' : 'img');
     node.className = 'nix-civitai-view-media';
@@ -952,8 +1182,125 @@
     return slide;
   };
 
+  // Sharp media for the slide being looked at, and only that one: the feed's
+  // src is a 450px (video) or 800px (image) rendition. width=1920 is served for
+  // both, capped at the source's own size — measured 2026-10-31: an image went
+  // 800px to a 1.0 MB JPEG (original=true is a 2.3 MB PNG), a video 450 to its
+  // native 1080 (0.76 MB to 1.47 MB). The swap happens after the bigger file
+  // has loaded, so the slide never goes blank.
+  const SHARP = 'width=1920';
+  const sharpen = (slide) => {
+    const node = slide.querySelector('.nix-civitai-view-media');
+    if (!node || slide.dataset.sharp) return;
+    slide.dataset.sharp = '1';
+    const parts = node.src.split('/');
+    if (parts.length < 2 || !/width=\d+/.test(parts[parts.length - 2])) return;
+    parts[parts.length - 2] = parts[parts.length - 2].replace(/width=\d+/, SHARP);
+    const url = parts.join('/');
+    if (node.tagName === 'VIDEO') {
+      const t = node.currentTime;
+      node.src = url;
+      node.currentTime = t;
+      if (slide === viewCur) node.play().catch(() => {});
+      return;
+    }
+    const pre = document.createElement('img');
+    pre.onload = () => { if (node.isConnected) node.src = url; };
+    pre.src = url;
+  };
+
+  const appendSlides = (cards) => {
+    const have = new Set([...viewEl.children].map((s) => s.dataset && s.dataset.href));
+    for (const c of cards) {
+      const href = cardLink(c).getAttribute('href');
+      if (have.has(href)) continue;
+      have.add(href);
+      const slide = slideFor(c);
+      viewEl.insertBefore(slide, infoEl);
+      if (viewIo) viewIo.observe(slide);
+    }
+  };
+
+  // The feed is virtualised and infinite: reaching the last slide scrolls the
+  // grid underneath to its end, which is what makes the site load the next
+  // page, then appends whatever new cards arrived. Three tries, a second apart.
+  const loadMore = (tries) => {
+    if (!viewEl || !viewFeed || tries <= 0) return;
+    const scroller = viewFeed.closest('.scroll-area');
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    moreTimer = setTimeout(() => {
+      moreTimer = 0;
+      if (!viewEl) return;
+      const before = viewEl.querySelectorAll('.nix-civitai-slide').length;
+      appendSlides(viewerCards(viewFeed));
+      if (viewEl.querySelectorAll('.nix-civitai-slide').length === before) loadMore(tries - 1);
+    }, 1000);
+  };
+
+  const fillInfo = () => {
+    if (!infoEl || !viewCur) return;
+    const m = IMAGE_HREF.exec(viewCur.dataset.href || '');
+    const id = m && Number(m[1]);
+    const render = (data) => {
+      if (!infoEl) return;
+      infoEl.textContent = '';
+      const add = (head, text) => {
+        if (!text) return;
+        const h = document.createElement('h4');
+        h.textContent = head;
+        const p = document.createElement('p');
+        p.textContent = text;
+        infoEl.append(h, p);
+      };
+      if (!data) { add('Generation data', 'Not available for this item.'); return; }
+      const meta = data.meta || {};
+      add('Prompt', meta.prompt);
+      add('Negative prompt', meta.negativePrompt);
+      const params = [
+        meta.sampler && 'Sampler: ' + meta.sampler,
+        meta.steps && 'Steps: ' + meta.steps,
+        meta.cfgScale && 'CFG: ' + meta.cfgScale,
+        meta.seed && 'Seed: ' + meta.seed,
+        meta.width && meta.height && 'Size: ' + meta.width + ' x ' + meta.height,
+      ].filter(Boolean).join('\n');
+      add('Parameters', params);
+      const res = (data.resources || []).map((r) =>
+        [r.modelName || r.name, r.versionName && '(' + r.versionName + ')', r.modelType || r.type,
+          r.strength != null && 'x' + r.strength].filter(Boolean).join(' '));
+      add('Resources', res.join('\n'));
+      if (!infoEl.childElementCount) add('Generation data', 'None recorded.');
+    };
+    if (!id) return render(null);
+    if (genCache.has(id)) return render(genCache.get(id));
+    infoEl.textContent = 'Loading...';
+    // The detail page's own tRPC call, image.getGenerationData, same-origin
+    // with the session cookie (measured 2026-10-31: 200, prompt, sampler, seed
+    // and resources). The public /api/v1/images returned meta: null for all
+    // 20 images sampled, which is why it is not used. Any failure renders
+    // "not available" — the viewer itself never depends on this.
+    const input = encodeURIComponent(JSON.stringify({ json: { id, authed: true } }));
+    fetch('/api/trpc/image.getGenerationData?input=' + input, { credentials: 'same-origin', signal: ac.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const data = j && j.result && j.result.data && j.result.data.json;
+        genCache.set(id, data || null);
+        if (viewCur && (IMAGE_HREF.exec(viewCur.dataset.href || '') || [])[1] === String(id)) render(data);
+      })
+      .catch(() => render(null));
+  };
+
+  const toggleInfo = () => {
+    if (!viewEl) return;
+    if (infoEl) { infoEl.remove(); infoEl = null; return; }
+    infoEl = document.createElement('div');
+    infoEl.className = 'nix-civitai-info';
+    viewEl.appendChild(infoEl);
+    fillInfo();
+  };
+
   const openView = (card) => {
-    const cards = viewerCards();
+    viewFeed = card.closest(FEED);
+    const cards = viewerCards(viewFeed);
     const start = Math.max(0, cards.indexOf(card));
     viewEl = document.createElement('div');
     viewEl.className = 'nix-civitai-view';
@@ -972,13 +1319,34 @@
       viewIo = new IntersectionObserver((entries) => {
         for (const e of entries) {
           const v = e.target.querySelector('video');
-          if (!v) continue;
-          if (e.isIntersecting) v.play().catch(() => {});
-          else v.pause();
+          if (e.isIntersecting) {
+            viewCur = e.target;
+            sharpen(e.target);
+            if (v) v.play().catch(() => {});
+            if (infoEl) fillInfo();
+            const slides = viewEl.querySelectorAll('.nix-civitai-slide');
+            if (e.target === slides[slides.length - 1] && !moreTimer) loadMore(3);
+          } else if (v) v.pause();
         }
       }, { root: viewEl, threshold: 0.5 });
       for (const slide of viewEl.children) viewIo.observe(slide);
     }
+  };
+
+  // Enter leaves the viewer for the item's own page — the site's own link is
+  // clicked when it is still mounted, so it is a client-side route change.
+  // Cmd/Ctrl+Enter opens it in a new tab and keeps the viewer.
+  const openCurrent = (newTab) => {
+    const href = viewCur && viewCur.dataset.href;
+    if (!href) return;
+    if (newTab) { window.open(href, '_blank', 'noopener'); return; }
+    closeView();
+    const a = document.querySelector('a[href="' + CSS.escape(href) + '"]');
+    // The card's own link is clicked so the site routes client-side — and
+    // that click must not be read as a fresh card click and reopen the viewer
+    // (it did, measured 2026-10-31), hence the one-shot pass.
+    if (a) { passClick = true; a.click(); passClick = false; }
+    else location.assign(href);
   };
 
   // Snapping already handles the wheel and the trackpad; this is for the keys.
@@ -1026,6 +1394,10 @@
   const hdrOnScroll = (e) => {
     const el = e.target;
     if (torn || !el || el.nodeType !== 1 || !el.classList.contains('scroll-area')) return;
+    // The page's own scroller only. The Notifications drawer and the
+    // generator panel are .scroll-area too (measured 2026-10-31): scrolling
+    // either hid the header, and it stayed hidden after the drawer closed.
+    if (!el.querySelector('main')) return;
     const y = el.scrollTop;
     const delta = y - hdrLastY;
     hdrLastY = y;
@@ -1050,9 +1422,12 @@
     // to Next's router before it bubbles anywhere useful. Verified: the URL
     // does not change.
     on(document, 'click', (e) => {
-      if (viewEl) return;
+      if (viewEl || passClick) return;
+      // A modified or non-primary click is the reader asking for the link
+      // itself (new tab, new window, download): never intercepted.
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const card = e.target.closest && e.target.closest(CARD_SEL);
-      if (!card || !card.closest(FEED)) return;
+      if (!card || !card.closest(FEED) || !cardLink(card)) return;
       if (!CIVITAI_MEDIA.test(mediaSrc(card.querySelector('img, video')))) return;
       e.preventDefault();
       e.stopPropagation();
@@ -1061,6 +1436,8 @@
     on(document, 'keydown', (e) => {
       if (!viewEl) return;
       if (e.key === 'Escape') { e.preventDefault(); closeView(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); openCurrent(e.metaKey || e.ctrlKey); return; }
+      if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); toggleInfo(); return; }
       const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
         : (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ? -1 : 0;
       if (!dir) return;
@@ -1084,7 +1461,7 @@
     on(document, 'focusin', hdrFocus);
     on(document, 'focusout', () => requestAnimationFrame(hdrFocus));
     // A route change starts the new page at the top with the header shown.
-    if (self.navigation) on(self.navigation, 'navigatesuccess', () => { hdrScrollShow = true; hdrLastY = 0; hdrSync(); });
+    if (self.navigation) on(self.navigation, 'navigatesuccess', () => { setRoute(); hdrScrollShow = true; hdrLastY = 0; hdrSync(); });
   };
   if (document.body) start();
   else on(document, 'DOMContentLoaded', start, { once: true });
@@ -1125,6 +1502,10 @@
     closeView();                                  // overlay + its IntersectionObserver
     root.removeAttribute(HDR_ATTR);
     root.style.removeProperty(HDR_VAR);
+    root.removeAttribute(ROUTE_ATTR);
+    root.removeAttribute(FILTER_ATTR);
+    for (const el of document.querySelectorAll('.' + FILTER_BTN)) el.remove();
+    for (const el of document.querySelectorAll('[' + OFF + ']')) el.removeAttribute(OFF);
 
     // Our own marks come off FIRST, while every marked node is still in the
     // document: the bar goes home next, and a home whose parent React already
