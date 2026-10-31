@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.0.0
+// @version      2.0.1
 // @description  Strips Civitai's image and video feeds to media plus one icon-only top bar, and keeps every other page usable: model, article and challenge cards stay stock and open their own page, a model page keeps Download and Details in a slim sidebar, and the header autohides. Image cards open a fullscreen viewer (arrows, Enter to open, i for the prompt). Surfaces are darkened; ads, footer and announcements go.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -816,17 +816,22 @@
     if (btn) btn.remove();
     btn = document.createElement('button');
     btn.type = 'button';
-    // The gear's own classes, read at runtime, so the button matches whatever
-    // the site's icon buttons look like this build.
+    // The gear's own classes, inline style and data-* attributes, read at
+    // runtime, so the button matches whatever the site's icon buttons look
+    // like this build. Mantine sizes them through the inline --ai-size and
+    // --ai-radius and colours them by data-variant: copying the classes alone
+    // gave a 28px square beside the 32px round gear (measured 2026-10-31).
     btn.className = gear.className + ' ' + FILTER_BTN;
+    if (gear.hasAttribute('style')) btn.setAttribute('style', gear.getAttribute('style'));
+    for (const a of gear.attributes) if (a.name.startsWith('data-')) btn.setAttribute(a.name, a.value);
     btn.setAttribute('aria-label', 'Sort and filters');
     btn.setAttribute('title', 'Sort and filters');
     btn.setAttribute('aria-pressed', root.hasAttribute(FILTER_ATTR) ? 'true' : 'false');
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('width', '18');
-    svg.setAttribute('height', '18');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
     svg.setAttribute('fill', 'none');
     svg.setAttribute('stroke', 'currentColor');
     svg.setAttribute('stroke-width', '2');

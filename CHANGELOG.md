@@ -160,6 +160,22 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [2.0.1] - 2026-10-31
+
+#### Fixed
+
+- **The sort-and-filters button was a 28px square beside the 32px round
+  gear.** Mantine sizes its icon buttons through inline `--ai-size` and
+  `--ai-radius` and colours them by `data-variant`; the button now copies
+  those from the gear as well as its classes, and its icon is 16px like the
+  gear's. Measured on the signed-in /images: 32px, 32px radius, same centre.
+
+#### Verified live (2.0.0, signed in)
+
+The button sits between the docked tag bar and the gear; one click showed
+"Everyone · Most Reactions · Filters", a second hid it. Scrolling the
+Notifications drawer by 1200px left the header shown.
+
 ### [2.0.0] - 2026-10-31
 
 A UX study of every Civitai category (four read-only passes over feeds and
