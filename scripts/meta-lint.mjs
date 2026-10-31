@@ -157,7 +157,10 @@ function lintFile(path) {
 function lintVersionsAgainst(ref, files) {
   let changed;
   try {
-    changed = execFileSync('git', ['diff', '--name-only', `${ref}...HEAD`, '--', '*.user.js'], {
+    // --merge-base with one commit diffs the WORKING TREE against the merge
+    // base, so an uncommitted edit is checked too; `ref...HEAD` saw commits
+    // only and passed an unbumped edit before it was committed.
+    changed = execFileSync('git', ['diff', '--name-only', '--merge-base', ref, '--', '*.user.js'], {
       encoding: 'utf8',
     })
       .split('\n')
