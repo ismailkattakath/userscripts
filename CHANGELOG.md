@@ -160,6 +160,18 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [1.25.1] - 2026-10-31
+
+#### Fixed
+
+- **1.25.0 blanked the home page.** The new adblock placeholder is an
+  `a[href="/pricing"]` wrapping its image. On the home page that link is a
+  direct child of the container holding all 22 sections. 1.25.0's ad sweep
+  walked up from the image to the first ancestor containing a `/pricing` link,
+  which was that container, and hid it. The sweep now tags the link itself, or
+  its card when the link is a feed card's only child. As a backstop, the walk
+  never tags an element with more than one child. Measured on civitai.red/.
+
 ### [1.25.0] - 2026-10-31
 
 #### Fixed

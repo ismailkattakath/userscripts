@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.25.0
+// @version      1.25.1
 // @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -633,10 +633,23 @@
 
   const sweep = () => {
     for (const img of document.querySelectorAll(PLEA)) {
+      // The 2026-10 placeholder IS a link: img inside a[href="/pricing"]. On a
+      // feed that link is a card's only child, so the card goes; on the home
+      // page (measured 2026-10-31, civitai.red) the link sits DIRECTLY in the
+      // 22-section page container, so the link alone goes. 1.25.0 walked up
+      // instead and tagged that container, which blanked the whole home page.
+      const link = img.parentElement;
+      if (link && link.matches('a[href="/pricing"]')) {
+        const box = link.parentElement;
+        tag(box && box.children.length === 1 && box.matches(CARD) ? box : link);
+        continue;
+      }
       // Stop at the first ancestor that RESERVES ad height or owns the pricing
       // link — those are the slot's own declarations, not incidental styling.
+      // Never past an element that holds more than one child: an ad slot wraps
+      // one creative, and a wider tag hides real content with it.
       let el = img.parentElement;
-      for (let up = 0; el && up < MAX_UP; up++, el = el.parentElement) {
+      for (let up = 0; el && up < MAX_UP && el.children.length <= 1; up++, el = el.parentElement) {
         const min = el.style.minHeight || '';
         if (min.includes('250') || min.includes('280') || el.querySelector('a[href="/pricing"]')) {
           tag(el);
