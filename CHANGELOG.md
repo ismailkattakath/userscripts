@@ -23,6 +23,84 @@ Entries are grouped by script. Within a release, use the
   fast-forwarded onto the `published` branch, which Greasy Fork's webhook syncs
   from. A version bump ships on merge, with no paste step.
 
+## youtube-share-to-metube
+
+### [3.0.0] - 2026-10-31
+
+#### Renamed
+
+- **@name** is now YouTube — Store to MeTube, beside Share. The old name ("Share becomes Store") is false since Share is no longer taken over. Violentmonkey matches an install by namespace and name, so 3.0.0 installs as a new entry beside 2.1.1; remove the old entry, or both run.
+
+#### Changed
+
+- **Share is Share again; Store is a chip of its own.** 2.x turned YouTube's
+  Share button into Store on the premise that sharing stayed in the ⋯ menu.
+  It did not: measured at 1512px, the ⋯ menu holds only "Download, Report",
+  so 2.x removed sharing from the watch page. 3.0.0 leaves Share untouched and
+  adds a red Store chip right after it. The chip copies Share's classes, icon
+  wrapper and spacing at runtime, so it is the same 40px round button. Plain
+  click is still audio/mp3, Alt-click still video/mp4, with the same request
+  body.
+- **Feedback moved onto the chip.** The bar is icon-only now, so 2.x's
+  "Storing audio / Stored / Failed" label had nowhere to appear. Each state has
+  its own glyph and fill: tray arrow on red (ready), clock on the stock grey
+  (storing), check on green (stored), cross on dark red (failed). The
+  accessible name and the open tooltip change in the same step. A click while
+  one is still storing is ignored.
+- **Own tooltip, YouTube's look.** YouTube's shared tooltip never fires for a
+  control it did not build, so the chip shows its own popover with the class
+  list of YouTube's, read at runtime: the same grey bubble, 16px below,
+  centred. No `title` attribute, so no double tooltip.
+
+#### Fixed
+
+- **The chip appears however you reach the video.** 2.x matched only
+  `/watch*`, and a userscript manager injects per page load, so home → click a
+  video never armed it. `@match` is now `https://www.youtube.com/*` and the work
+  is gated to `/watch` on each of YouTube's navigation events. Off `/watch` the
+  script watches nothing; the page-wide observer for a late-drawn bar now runs
+  only on `/watch` and only until Share appears.
+
+#### Verified live
+
+Signed out, 1280px, isolated context (no installed copy), bundle injected with
+`GM_xmlhttpRequest` stubbed — no real request reached MeTube. Home → click a
+video: chip after Share, Share's `aria-label` and glyph untouched. Stubbed ok,
+error body and timeout gave check, cross, cross, each with matching name and
+tooltip; Alt sent `video`/`mp4`, plain `audio`/`mp3`, a second click while
+storing sent nothing. A trusted click on Share opened YouTube's share dialog,
+Escape closed it. Related-video navigation kept the same chip node; a fresh
+playlist load (injected at document start) drew the chip with no page-wide
+observer left; theatre on and off kept it. Back to home: zero observers. A
+second injection left one chip; teardown left the row stock.
+
+## github-pulls-running-checks
+
+### [2.5.1] - 2026-10-31
+
+#### Fixed
+
+- **Running jobs past the fifth had a blank right-hand cell.** Only five jobs
+  get an elapsed clock (`ELAPSED_MAX`), and the rest looked broken. A running
+  job's cell now says **running** until its clock arrives, and keeps it if no
+  clock comes — past the cap, a failed lookup, or a check with no Actions job
+  id.
+- **A failed start-time lookup was remembered forever.** A non-2xx or network
+  error was cached as "no start time", so that job never got a clock again in
+  the tab. Only a found start time is cached now; a failure is retried on the
+  next hover.
+- Header text: the PR row's badge is now a progress count ("3/13 checks
+  passing"), not one bit, and there is no 10-second group refresh — only the
+  10-second panel cache.
+
+#### Verified live
+
+Signed out, isolated context, bundle injected. rust-lang/rust#165221 with ten
+jobs running: five clocks ticking, five rows saying "running". With the
+start-time requests forced to 503, all ten said "running"; re-triggering the
+card (a synthetic `mouseover` on its trigger) re-asked the five start times
+and the clocks appeared.
+
 ## google-photos-icon-nav
 
 ### [4.8.0] - 2026-10-26
