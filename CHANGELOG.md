@@ -160,6 +160,72 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [2.0.0] - 2026-10-31
+
+A UX study of every Civitai category (four read-only passes over feeds and
+detail pages, 2026-10-31) found the image-feed treatment applied to every
+route, because Civitai uses one masonry component almost everywhere. 2.0.0
+scopes each rule to the route it was written for. The major version is
+because cards on six route families change back to stock.
+
+#### Changed
+
+- **Route profiles.** `<html data-nix-civitai-route>` is set from the URL:
+  `media` (/images, /videos) keeps media-only cards, the 8px grid and the
+  width fit; `models` (/models, /3d-models) keeps the width fit with stock
+  cards; `model` and `post` get their own rules; every other route gets the
+  theme, the autohiding header and the chrome rules only.
+- **Model page: slim sidebar.** Download (with variants and sizes), the
+  Details panel (type, stats, reviews, published, base model, hash, trigger
+  words) and the license are visible again. Create, Collection, Tensors,
+  About this version, the creator card and the promo are hidden by name; a
+  block the script cannot find stays visible. The model title shows.
+- **Feed sort and filters**: one button beside the gear shows Civitai's own
+  controls in place.
+- **Viewer**: Enter opens the item's page (Cmd/Ctrl+Enter in a new tab); `i`
+  shows the prompt, negative prompt, parameters and resources for the current
+  slide; arrows move in reading order (rows, then columns); the current slide
+  loads a sharp 1920px rendition; reaching the last slide loads more.
+- **Post pages**: every image fits the window height.
+
+#### Fixed
+
+- **Clicking a card on /models, /3d-models, /articles, /comics and
+  /challenges opened the image viewer** and never reached the page. The viewer
+  now opens only for cards linking to /images/<id>, and never for a modified
+  or non-primary click.
+- **Search showed 0 of 982 results and /crucibles one row of 140px tiles**:
+  the grid override (old rule 12b) is removed.
+- **Collections overlapped by 43px** with the Filters button covered: the
+  grid and zoom rules no longer run there.
+- **Model, article and comic cards lost their titles**: rule 6 runs on the
+  media feeds only.
+- **The header hid when the Notifications drawer or the generator panel
+  scrolled**, and stayed hidden (1.26.0): only the page's own scroller counts.
+- **Nav labels were back** (Civitai dropped the label's class): re-keyed on
+  the link's shape.
+- **A 181px blank band** sat above feeds, home and /challenges: the
+  announcement wrapper collapses too.
+- **Discussion leaked onto model pages**: found by its heading now.
+- **A 90px empty ad box** on image pages: hidden by `data-adhesive-ad`.
+- **Home's settings button has a different label**: matched by prefix.
+
+#### Verified live
+
+Clean isolated context at 1512px, with the bundle injected per route:
+/models card click opened the model page (zoom cleared, sidebar 394px with
+Download, Details and License; Create, Tensors and the creator card hidden;
+Discussion hidden; title shown). Search: 12 cards at 320px in a 3-column
+grid. /crucibles: tiles 320x411, matching stock. Collection: smallest
+vertical gap 16px, title and Filters visible. /images viewer: first four
+slides on one row in left-to-right order; current slide swapped to the
+1920px rendition (2200x3215 natural); `i` panel showed prompt, parameters and
+resources and followed ArrowRight; Enter opened /images/<id>; reaching the
+end grew 25 slides to 71, all unique. /articles: 16 of 19 cards titled, a
+click opened the article. Post: 12 images at 568x852 in a 949px window.
+civitai.red home: 23 media items, no zoom, nothing tagged. Teardown left no
+attribute, button, tag, stylesheet or global.
+
 ### [1.26.0] - 2026-10-31
 
 #### Changed
