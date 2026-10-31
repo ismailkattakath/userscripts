@@ -3,8 +3,8 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.25.1
-// @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
+// @version      1.26.0
+// @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, the header autohides (back on scroll up), and the footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
 // @match        *://civitai.com/*
@@ -129,21 +129,31 @@
     target.addEventListener(type, fn, { ...opts, signal: ac.signal });
 
   const SHEET_CSS = `
-    /* 1. The header — nav, search, create button, notifications, buzz counter,
-       account menu. On request, not a hide-for-decluttering choice like the
-       other rules below, but the SAME mechanism: a plain rule beats a JS
-       removal here too,
-       because "header" is a stable tag-level handle (one per page, Civitai
-       never uses a second <header>) and a stylesheet rule needs no observer to
-       survive a route's remount — CSS just keeps matching whatever node is
-       there. Measured 2026-09-06: header is a flex sibling of the scrolling
-       column in a flex-column shell, and that column is already flex-1, so
-       display:none reclaims its 60px the same way a DOM removal would —
-       verified identical (scroll-area top 60→0, height +60) either way, with
-       none of a JS removal's per-route re-application or single-frame flash
-       on a fresh mount. */
+    /* 1. The header AUTOHIDES — it is no longer hidden outright. 1.25 and
+       earlier hid it for good, which took Sign In, search, the account menu
+       (settings, browsing level, sign out), notifications and Create with it:
+       there was no way to sign in at all (operator report, 2026-10-31).
+
+       Hidden while scrolling DOWN, back on scroll UP, always shown within
+       HDR_TOP_PX of the top — the same rules as thumbwall's top bar. The
+       MECHANISM differs, because the layout does. Measured 2026-10-31: header
+       is position:static, the first child of a flex column ("flex h-full
+       flex-1 flex-col") whose second child holds div.scroll-area, the ONE
+       scroller (the document itself never scrolls: 949/949). thumbwall's bar
+       is position:fixed, so translate moves it off for free; translating this
+       one would leave its 60px slot behind as a blank band. So the slot itself
+       collapses: a negative top margin of the header's own measured height,
+       which the scroll column absorbs as height. The content shifts the way
+       the reader is already scrolling, which is why it reads as motion and
+       not as a jump.
+
+       The JS below writes ONE attribute on <html> and the measured height as
+       a custom property; nothing here is a pixel guess beyond the fallback. */
+    html[data-nix-civitai-hdr="hidden"] header {
+      margin-top: calc(-1 * var(--nix-civitai-hdr-h, 60px)) !important;
+    }
     header {
-      display: none !important;
+      transition: margin-top 180ms ease;
     }
 
     /* 2. The feed's sort/NSFW-toggle/Filters group ("Everyone · Most
@@ -982,6 +992,54 @@
   // @run-at is document-start so rule 1-3 beat first paint, but this pass needs
   // body — hence the one gate, rather than a second script at document-end.
   let observer = null;
+  // ── Header autohide (rule 1) ─────────────────────────────────────────────
+  //
+  // ONE writer for the attribute, from two inputs that cannot clobber each
+  // other: scroll direction and keyboard focus inside the header. Writes only
+  // on a state change. Focus is gated on the reader having acted (a keydown or
+  // pointerdown) — thumbwall measured a site autofocusing its search box, which
+  // made a plain :focus-within reveal true from load; the gate costs nothing
+  // here and keeps that failure from ever arriving with a Civitai change.
+  const HDR_ATTR = 'data-nix-civitai-hdr';
+  const HDR_VAR = '--nix-civitai-hdr-h';
+  const HDR_TOP_PX = 48;          // thumbwall's NIX_TOPBAR_BAND
+  const HDR_DELTA_MIN = 6;        // under a fast wheel step, over trackpad noise
+  let hdrScrollShow = true;
+  let hdrFocusShow = false;
+  let hdrHidden = false;
+  let hdrLastY = 0;
+  let hdrActed = false;
+  const hdrSync = () => {
+    const hide = !(hdrScrollShow || hdrFocusShow);
+    if (hide === hdrHidden) return;
+    const header = document.querySelector('header');
+    // Measured at the moment it hides, while it still has its height: the
+    // signed-out and signed-in headers need not match, and a fixed 60 would
+    // leave a sliver or eat a row the day one of them changes.
+    if (hide && header && header.offsetHeight) {
+      root.style.setProperty(HDR_VAR, header.offsetHeight + 'px');
+    }
+    hdrHidden = hide;
+    if (hide) root.setAttribute(HDR_ATTR, 'hidden');
+    else root.removeAttribute(HDR_ATTR);
+  };
+  const hdrOnScroll = (e) => {
+    const el = e.target;
+    if (torn || !el || el.nodeType !== 1 || !el.classList.contains('scroll-area')) return;
+    const y = el.scrollTop;
+    const delta = y - hdrLastY;
+    hdrLastY = y;
+    if (y <= HDR_TOP_PX) hdrScrollShow = true;
+    else if (delta > HDR_DELTA_MIN) hdrScrollShow = false;
+    else if (delta < -HDR_DELTA_MIN) hdrScrollShow = true;
+    hdrSync();
+  };
+  const hdrFocus = () => {
+    const header = document.querySelector('header');
+    hdrFocusShow = !!(hdrActed && header && header.contains(document.activeElement));
+    hdrSync();
+  };
+
   const start = () => {
     // A copy torn down before its bootstrap listener fired must NOT mount. The
     // { signal } on that listener already removes it, so this is belt to those
@@ -1018,6 +1076,15 @@
     // A window resize changes R and nothing in the DOM, so no mutation reports
     // it; the site's own observer is debounced 100ms, so this lands first.
     on(window, 'resize', kickSweep);
+    // scroll does not bubble; capture sees the one .scroll-area wherever a
+    // route remounts it, with no node of the site's held between routes.
+    on(document, 'scroll', hdrOnScroll, { capture: true, passive: true });
+    on(document, 'keydown', () => { hdrActed = true; }, { capture: true });
+    on(document, 'pointerdown', () => { hdrActed = true; }, { capture: true });
+    on(document, 'focusin', hdrFocus);
+    on(document, 'focusout', () => requestAnimationFrame(hdrFocus));
+    // A route change starts the new page at the top with the header shown.
+    if (self.navigation) on(self.navigation, 'navigatesuccess', () => { hdrScrollShow = true; hdrLastY = 0; hdrSync(); });
   };
   if (document.body) start();
   else on(document, 'DOMContentLoaded', start, { once: true });
@@ -1056,6 +1123,8 @@
     if (kickFrame) cancelAnimationFrame(kickFrame);
     kickFrame = 0;
     closeView();                                  // overlay + its IntersectionObserver
+    root.removeAttribute(HDR_ATTR);
+    root.style.removeProperty(HDR_VAR);
 
     // Our own marks come off FIRST, while every marked node is still in the
     // document: the bar goes home next, and a home whose parent React already
