@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub — running checks in the PR hovercard
 // @namespace    kattakath.com
-// @version      2.5.0
+// @version      2.5.1
 // @description  Adds a checks section to GitHub's own PR hovercard, anywhere one appears: failed jobs named, jobs in progress with a live elapsed clock, grouped by workflow, with the push/pull_request twins merged into one entry instead of listed twice. Same-origin requests only, no token, no second popup.
 // @author       Ismail Kattakath
 // @license      MIT
@@ -15,14 +15,17 @@
 
 // The problem, measured 2026-09-11 on
 // github.com/Infin8-Information-Technologies/takeoff-api-infra/pulls (live DOM,
-// logged in): a PR row's checks badge carries exactly one bit of information.
-// Its accessible name is the whole payload —
+// logged in): a PR row's checks badge carried exactly one bit of information.
+// Its accessible name was the whole payload —
 //
 //   aria-label="Status checks: pending"     svg.octicon-dot-fill
 //
-// "pending" for a repo whose CI is thirty-odd jobs across five workflows. Which
-// job is running is not in the row, not in the badge, and not in the list route's
-// embedded JSON.
+// "pending" for a repo whose CI is thirty-odd jobs across five workflows.
+// Re-measured 2026-10-31: the badge has since grown a progress count — "15/23"
+// on NixOS/nixpkgs/pulls, "3/13 checks passing" as the accessible name on
+// rust-lang/rust/pulls — so it now says HOW MANY have finished. It still does
+// not say which job is running or for how long — not in the row, not in the
+// badge, and not in the list route's embedded JSON. That is this script's job.
 //
 // WHERE IT GOES. v1 of this script opened its own card off the checks badge.
 // Wrong surface: hovering a PR row already produces a card — GitHub's own PR
@@ -78,11 +81,13 @@
 // So elapsed costs one extra request per IN-PROGRESS job. Three things keep that
 // honest. It is only asked for jobs that are actually running — a queued job has
 // not started, so there is nothing to ask and it is labelled "queued" instead.
-// The answer is cached forever, keyed by check-run id, with no TTL: a job's
-// start time is immutable, so a re-hover and the 10s group refresh both cost
-// nothing. And it is capped (ELAPSED_MAX) so a wide matrix cannot turn one
-// hover into twenty requests; jobs past the cap keep their row and lose only
-// the clock.
+// A found start time is cached forever, keyed by check-run id, with no TTL: a
+// job's start time is immutable, so a re-hover after the panel's 10s TTL has
+// lapsed re-reads the panel but not the clocks. A FAILED lookup is not cached —
+// a failure is not a fact about the job — so the next hover asks again. And it is
+// capped (ELAPSED_MAX) so a wide matrix cannot turn one hover into twenty
+// requests; jobs past the cap keep their row and say "running" where the clock
+// would be.
 //
 // Once a start time is known the clock ticks locally, once a second, off
 // Date.now() — no polling, no further requests, and it keeps counting while the
@@ -238,7 +243,7 @@
   // Ceiling on the per-job start-time lookups one hover may fire. Everyday CI
   // runs one to three jobs at a time; this exists so a fanned-out matrix cannot
   // turn a hover into twenty 62KB requests. Rows past it keep everything but
-  // the clock.
+  // the clock, and say "running" in its place (STANDING).
   const ELAPSED_MAX = 5;
   // Ceiling on named failure rows, for the same reason: a card 360px wide has no
   // use for twenty of them. The overflow is counted, not dropped silently.
@@ -272,8 +277,13 @@
   // running ones: on a repo with auto-merge armed, a red job is what is actually
   // holding the PR, so it outranks a job that is still going.
   const isBroken = (status) => status === 'failure' || status === 'cancelled';
-  // What the right-hand cell says for a job that has no clock to show.
-  const STANDING = { queued: 'queued', failure: 'failed', cancelled: 'cancelled' };
+  // What the right-hand cell says for a job that has no clock to show. A running
+  // job starts out saying "running" too, and keeps it if it never gets a clock —
+  // past ELAPSED_MAX, a failed lookup, or a check with no Actions job id. Before
+  // 2.5.1 that cell was empty, and three of eight running rows on
+  // NixOS/nixpkgs#581281 (2026-10-31) read as broken. Verified the same day on
+  // rust-lang/rust#165221: ten running, five clocks, five "running".
+  const STANDING = { running: 'running', queued: 'queued', failure: 'failed', cancelled: 'cancelled' };
 
   // Layout and type come from the card's own Primer utilities; only the status
   // colours and the two-column job row are ours, and those use Primer's tokens
@@ -468,10 +478,12 @@
   }
 
   // ---- elapsed -------------------------------------------------------------
-  // Keyed by check-run id and never evicted: a job's start instant is a fact
-  // about the past, so unlike the checks panel it has nothing to go stale. The
-  // map holds the PROMISE, which is also what collapses two hovers racing for
-  // the same job into one request.
+  // Keyed by check-run id and never evicted once answered: a job's start instant
+  // is a fact about the past, so unlike the checks panel it has nothing to go
+  // stale. The map holds the PROMISE, which is also what collapses two hovers
+  // racing for the same job into one request. A null answer — a non-2xx, a
+  // missing timestamp, a network error — is evicted when it lands, so it is
+  // retried on the next hover instead of being remembered as "no start time".
   const started = new Map();
 
   async function fetchStarted(ctx, id) {
@@ -495,7 +507,15 @@
   }
 
   function loadStarted(ctx, id) {
-    if (!started.has(id)) started.set(id, fetchStarted(ctx, id).catch(() => null));
+    if (!started.has(id)) {
+      const pending = fetchStarted(ctx, id).catch(() => null);
+      started.set(id, pending);
+      // Identity-checked, so a teardown's clear() followed by a fresh lookup is
+      // never evicted by the old promise settling late.
+      pending.then((at) => {
+        if (at === null && started.get(id) === pending) started.delete(id);
+      });
+    }
     return started.get(id);
   }
 
@@ -763,9 +783,7 @@
     for (const node of document.querySelectorAll(`[${MARK}]`)) node.remove();
 
     // The caches hold answers and, in `started`, PROMISES — including ones this
-    // abort just rejected into a permanent null. Dropping them is what stops a
-    // replacement copy inheriting a cached "this job has no start time" for a job
-    // that does.
+    // abort is about to settle as null. Dropped so nothing outlives the copy.
     cache.clear();
     inflight.clear();
     started.clear();

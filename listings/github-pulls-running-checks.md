@@ -46,13 +46,14 @@ Inside that section:
 ## What it does not do
 
 - **no token, no `api.github.com`, no `@connect`.** Same-origin, path-relative requests only — the same URL your browser would fetch, with your existing session
-- **no polling.** Requests happen on hover, are deduped while in flight, and are cached for 10 seconds; re-hovering the same pull request fetches nothing
+- **no polling.** Requests happen on hover, are deduped while in flight, and are cached for 10 seconds; re-hovering the same pull request within that window fetches nothing. A job's start time, once found, is kept for good; a lookup that failed is retried on the next hover
 - no storage, no settings panel, no `@require`
 - does not change the pull request page, the list, or any GitHub control
 
 ## Known limits
 
-- The elapsed clock reads the run id from an Actions job link, so **third-party checks** (Azure Pipelines and friends) show name and status but no clock — they degrade cleanly, they do not break.
+- **At most five clocks per hover.** A wide matrix with more running jobs still lists every one; rows past the fifth say **running** where the clock would be, so no request storm and no blank cell.
+- The elapsed clock reads the run id from an Actions job link, so **third-party checks** (Azure Pipelines and friends) show name, status and **running**, but no clock — they degrade cleanly, they do not break.
 - If GitHub changes the hovercard's markup the section simply stops appearing and the native card renders exactly as it always did. Verified by deliberately rotting the selector: stock card, zero requests.
 
 ## Privacy
