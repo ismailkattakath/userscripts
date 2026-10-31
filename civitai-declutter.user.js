@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      1.24.1
+// @version      1.25.0
 // @description  Strips Civitai to media plus one icon-only top bar: feed cards show only the image or video, a model page keeps its carousel and gallery, and the header, footer, chat, ads, announcements, titles, stats and comments all go. The route's scrollable bar (feed tags, or a model's version picker) docks into the top bar, grid gaps and edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -52,6 +52,33 @@
 // so this is constructed, with ONE property: a CSS zoom on `main`, sized so the
 // site's own math lands on k columns whose block fills the width exactly. The
 // site keeps doing the layout; no inline value is fought.
+//
+// CLASS-NAME DRIFT, measured 2026-10-31 on civitai.com /images, /videos,
+// /models and /models/3005406. Civitai's build now MINIFIES its CSS-module
+// classes: "MasonryContainer-module-scss-module__<hash>__queries" became
+// "Rvq10W_queries". The FILE name this script keyed on is gone; the hash still
+// churns; the LOCAL name — the SCSS class the component author wrote — survives,
+// so every hook below now keys on the local name. Each rule matches the old
+// and the new form through :is(old, new), because the .red and .green mirrors
+// are separate deployments that need not ship the same build on the same day.
+//   [class*="_queries"]            the masonry (1 per feed; was MasonryContainer)
+//   [class*="_filtersWrapper"]     sort/filter group (1 per feed; was FeedFilters)
+//   [class*="_cssFrame"]           creator cosmetic frame (always paired with
+//                                  _wrapper and _glow; was CosmeticWrapper)
+//   card > [class*="_content"]     /models media pane (siblings _header and
+//                                  _footer; was AspectRatioCard). Scoped as a
+//                                  card's direct child because "content" alone
+//                                  is generic
+//   [class*="scrollContainer"].mantine-ScrollArea-root   version picker, 1 on
+//                                  a model page (was ModelVersionList)
+//   [class*="gridInner"] > [class*="gridCol"]   model page columns; Mantine's
+//                                  Grid-inner and Grid-col are gone there
+//   [class*="_stack"]              model page title stack; Mantine Stack-root gone
+//   img[alt="Support Civitai creators"]   the adblock placeholder, linking
+//                                  /pricing; its old alt no longer appears
+// "_queries" is the weakest of these: a generic name. It is unique on all three
+// feeds today, and fit() still refuses any match whose inline width is not
+// 320·k + 16·(k−1), so a stray match degrades to stock instead of a wrong zoom.
 //
 // LIFECYCLE — one teardown, called at entry. Added 2026-09-14; this file had
 // none, alone in this family. A second copy is reachable in the wild (a Greasy
@@ -132,7 +159,7 @@
        home — a real absence, not a misfire. Its parent is "justify-between"
        with the nav-links group and a settings icon as the other two children,
        so hiding it just widens that gap; nothing needs to fill the space. */
-    [class*="FeedFilters-module"] {
+    :is([class*="FeedFilters-module"], [class*="_filtersWrapper"]) {
       display: none !important;
     }
 
@@ -203,12 +230,12 @@
        robust to whichever property a future cosmetic variant drives, rather
        than chasing the variable name — verified 2026-09-06 down to zero
        remaining background-image or box-shadow on all three. */
-    [class*="CosmeticWrapper-module"] {
+    :is([class*="CosmeticWrapper-module"], [class*="_cssFrame"]) {
       background: none !important;
       box-shadow: none !important;
     }
-    [class*="CosmeticWrapper-module"]::before,
-    [class*="CosmeticWrapper-module"]::after {
+    :is([class*="CosmeticWrapper-module"], [class*="_cssFrame"])::before,
+    :is([class*="CosmeticWrapper-module"], [class*="_cssFrame"])::after {
       background: none !important;
       box-shadow: none !important;
     }
@@ -246,14 +273,14 @@
        mantine Group directly under the masonry's stack, and a feed's tag bar
        in that same position is NOT a Group (it is ".min-w-0.min-h-[26px]"),
        so naming the Group cannot catch the bar this script wants kept. */
-    [class*="MasonryContainer-module"] div.relative.flex.overflow-hidden.rounded-md > *:not(.relative.flex-1):not([class*="AspectRatioCard-module"]) {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > *:not(.relative.flex-1):not(:is([class*="AspectRatioCard-module"], [class*="_content"])) {
       display: none !important;
     }
-    [class*="MasonryContainer-module"] div.relative.flex.overflow-hidden.rounded-md > div.relative.flex-1 > *:not(a),
-    [class*="MasonryContainer-module"] div.relative.flex.overflow-hidden.rounded-md > [class*="AspectRatioCard-module"] > *:not(a) {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > div.relative.flex-1 > *:not(a),
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) div.relative.flex.overflow-hidden.rounded-md > :is([class*="AspectRatioCard-module"], [class*="_content"]) > *:not(a) {
       display: none !important;
     }
-    [class*="MasonryContainer-module"] > * > [class*="mantine-Group-root"] {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > [class*="mantine-Group-root"] {
       display: none !important;
     }
 
@@ -308,10 +335,10 @@
     [class*="mainRegion"] > [class*="rail"] {
       display: none !important;
     }
-    [class*="contentCol"] [class*="Grid-inner"] > [class*="Grid-col"]:not([class*="mainSection"]) {
+    [class*="contentCol"] :is([class*="Grid-inner"], [class*="gridInner"]) > :is([class*="Grid-col"], [class*="gridCol"]):not([class*="mainSection"]) {
       display: none !important;
     }
-    [class*="contentCol"] > [class*="Stack-root"] > [class*="Stack-root"],
+    [class*="contentCol"] > :is([class*="Stack-root"], [class*="_stack"]) > :is([class*="Stack-root"], [class*="_stack"]),
     [class*="contentCol"] > a,
     [class*="contentCol"] > div:not([class]),
     [class*="contentCol"] > div.flex.flex-col.gap-4 {
@@ -397,7 +424,7 @@
        would stay 16. "height: 100%" spends that slack on the image instead —
        the one inline value this file overrides, and a bounded one. Verified
        after: every vertical gap 9px rendered, horizontal 9px, no overlap. */
-    [class*="MasonryContainer-module"] > * > * > .mx-auto.flex.justify-center {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > * > .mx-auto.flex.justify-center {
       gap: 8px !important;
     }
     /* And the columns take the surplus, not the edges. The site sizes the feed
@@ -405,15 +432,15 @@
        320 each, so an 8px gutter leaves 8px per column unspent — measured as a
        24.6px margin against an 8px gap. Letting them flex to equal fractions
        spends it on the cards instead: 330px cards, 8px edges. */
-    [class*="MasonryContainer-module"] .mx-auto.flex.justify-center > div {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) .mx-auto.flex.justify-center > div {
       flex: 1 1 0 !important;
       width: auto !important;
     }
-    [class*="MasonryContainer-module"] .flex.flex-col > div[style*="position: absolute"] {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] {
       padding-top: 4px !important;
       padding-bottom: 4px !important;
     }
-    [class*="MasonryContainer-module"] .flex.flex-col > div[style*="position: absolute"] > div.relative.flex.overflow-hidden.rounded-md {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > div.relative.flex.overflow-hidden.rounded-md {
       height: 100% !important;
     }
     #main div.\\@container[style*="padding-inline"] {
@@ -452,20 +479,20 @@
        this rule as it stands. The spacer's fixed height is what makes the feed
        scrollable at all; a tighter row rhythm needs those per-row offsets
        recomputed in JS, not CSS. */
-    [class*="MasonryContainer-module"] div[style*="grid-template-columns"] {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) div[style*="grid-template-columns"] {
       grid-template-columns: none !important;
       grid-auto-flow: column !important;
       grid-auto-columns: 1fr !important;
       column-gap: 8px !important;
     }
-    [class*="MasonryContainer-module"] {
+    :is([class*="MasonryContainer-module"], [class*="_queries"]) {
       width: 100% !important;
     }
     /* A creator cosmetic wraps its card in 6px of padding that a plain card
        does not have, so a wrapped card rendered 308px beside a neighbour's 320
        and the gutter alternated 28/16 down one row. Rule 5 already neutralises
        this wrapper's glow; dropping the padding is the rest of that job. */
-    [class*="CosmeticWrapper-module"] {
+    :is([class*="CosmeticWrapper-module"], [class*="_cssFrame"]) {
       padding: 0 !important;
     }
 
@@ -559,7 +586,7 @@
   // (React puts them back), so it polls on a 1s setInterval to keep up, and it
   // walks up to <body> unbounded — which blanks the page the day its predicate
   // stops matching. Tagging makes the poll unnecessary; MAX_UP bounds the walk.
-  const PLEA = 'img[alt="Please support civitai and creators by disabling adblock"]';
+  const PLEA = 'img[alt="Please support civitai and creators by disabling adblock"], img[alt="Support Civitai creators"]';
   const UPSELL = 'Become a Member to turn off ads today';
   const CARD = '.relative.flex.overflow-hidden';
   const MAX_UP = 6;
@@ -579,8 +606,8 @@
   // squeezed into the slot exactly as the tag bar does, and it is worth the slot
   // because every chip leads to more media.
   const BARS = [
-    '[class*="MasonryContainer-module"] .min-w-0.min-h-\\[26px\\]',
-    '[class*="ModelVersionList-module"][class*="scrollContainer"]',
+    ':is([class*="MasonryContainer-module"], [class*="_queries"]) .min-w-0.min-h-\\[26px\\]',
+    '[class*="scrollContainer"]:is([class*="ModelVersionList-module"], .mantine-ScrollArea-root)',
   ];
   const CUSTOMIZE_NAV_BTN = 'main > div.sticky.top-0.z-50 button[aria-label="Customize navigation"]'; // measured 2026-09-06
 
@@ -699,7 +726,7 @@
   //   box   FEED's parentElement — the provider's padded box (padding 16/16),
   //         the element its ResizeObserver reads.
   //   COL / SITE_GAP / MAX_COLS  MasonryProvider defaults; cardSizes.image is 320.
-  const FEED = '[class*="MasonryContainer-module"]';
+  const FEED = ':is([class*="MasonryContainer-module"], [class*="_queries"])';
   const HOST = 'main';
   const COL = 320;
   // The site's own gap, and the ONLY one this math may use. Rule 12 renders an
