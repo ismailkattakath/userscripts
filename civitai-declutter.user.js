@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.0.1
+// @version      2.0.2
 // @description  Strips Civitai's image and video feeds to media plus one icon-only top bar, and keeps every other page usable: model, article and challenge cards stay stock and open their own page, a model page keeps Download and Details in a slim sidebar, and the header autohides. Image cards open a fullscreen viewer (arrows, Enter to open, i for the prompt). Surfaces are darkened; ads, footer and announcements go.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -90,9 +90,6 @@
 //                                  is generic
 //   [class*="scrollContainer"].mantine-ScrollArea-root   version picker, 1 on
 //                                  a model page (was ModelVersionList)
-//   [class*="gridInner"] > [class*="gridCol"]   model page columns; Mantine's
-//                                  Grid-inner and Grid-col are gone there
-//   [class*="_stack"]              model page title stack; Mantine Stack-root gone
 //   img[alt="Support Civitai creators"]   the adblock placeholder, linking
 //                                  /pricing; its old alt no longer appears
 // "_queries" is the weakest of these: a generic name. It is unique on all three
@@ -352,12 +349,6 @@
        and re-verified together at document-start with zero errors and the
        carousel intact at 378x567:
          · rail — the 330x661 ad column beside the article
-         · Grid-col that is NOT mainSection — the Create/sale/Download/
-           Collection/Details sidebar. The media column carries "mainSection",
-           so excluding it by NAME (never by ":has") keeps it out of reach.
-         · Stack directly inside the contentCol Stack — title, stats, tag chips.
-           The media hangs off a Grid-container, which is not a Stack, so this
-           cannot reach it.
          · <a> children of contentCol — the two 275px ad banners.
          · classless <div> child — "Suggested Resources".
          · "flex flex-col gap-4" child — Discussion / Add Comment.
