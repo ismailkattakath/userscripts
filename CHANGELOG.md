@@ -160,6 +160,37 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [1.25.0] - 2026-10-31
+
+#### Fixed
+
+- **Most of the declutter had stopped working.** Civitai's build now minifies
+  its CSS-module class names: `MasonryContainer-module-scss-module__<hash>__queries`
+  became `Rvq10W_queries`. The script keyed on the component FILE names, which
+  are gone, so the full-width fit, the media-only cards, the filter-group hide,
+  the cosmetic-frame removal and the tag-bar dock all went dead. Only the
+  header, footer and other plain-tag rules kept working. Every hook now keys on
+  the LOCAL name instead (`_queries`, `_filtersWrapper`, `_cssFrame`, a card's
+  `_content`, `_scrollContainer`), through `:is(old, new)` so either build
+  matches. Measured on /images, /videos, /models and a model page.
+- **Model page: the sidebar and title came back.** Mantine's `Grid-inner`,
+  `Grid-col` and `Stack-root` became Civitai's own `gridInner`, `gridCol` and
+  `_stack` there. Both forms now match.
+- **Adblock placeholder tiles showed in the feed.** Their image alt changed to
+  "Support Civitai creators" (3 per /videos page). The ad sweep matches both alts.
+
+#### Verified live
+
+Isolated context, signed out, 1280px: the masonry filled 1253 of 1269px at zoom
+0.9435 (stock: 992px, centred), 0 of 70 card overlays left showing, cosmetic
+gradients gone, filter group hidden. /models: header and footer hidden on every
+card, 8px column gap. Model page: sidebar and title hidden, media shown. Signed
+in, the tag bar docks beside the settings gear (710px). Two injections leave
+one stylesheet; a card click opens one viewer, Escape closes it; teardown
+returns the page to stock.
+
+## civitai-declutter
+
 ### [1.24.1] - 2026-10-30
 
 #### Changed
