@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Google Photos — full-bleed grid, nav in a drawer
 // @namespace    kattakath.com
-// @version      4.8.0
-// @description  Full-bleed Google Photos: the grid takes the whole window on a black backdrop, the top bar is reduced to the account avatar, and Photos' own labelled nav is held off-canvas as a drawer holding search, Create, Help, Settings and Google apps. Memories row, date headings and the year scrubber are dropped. No breakpoint lifting, so search survives.
+// @version      4.9.0
+// @description  Full-bleed Google Photos at 1008px and wider: the grid takes the whole window on a black backdrop, the top bar is reduced to the account avatar, and Photos' own labelled nav is held off-canvas as a drawer holding search, Create, Help, Settings and Google apps. Memories row, date headings and the year scrubber are dropped. Albums, search results, shared albums and the photo viewer are left stock. No breakpoint lifting, so search survives.
 // @author       Ismail Kattakath
 // @license      MIT
 // @homepageURL  https://github.com/ismailkattakath/userscripts
@@ -96,13 +96,22 @@
   // by elimination. That also catches any FOURTH widget Google adds to the bar later.
   const SEL_PANE = 'div:has(> [role="main"])';
   const SEL_NAV = '[role="navigation"]';
+  // ANY menubar — used only to recognise the dangerous shape in apply(), never to style.
   const SEL_BAR = '[role="menubar"]';
-  const SEL_ACCOUNT = '[role="menubar"] > *:has(a[href*="SignOutOptions"])';
-  const SEL_TOOLS = '[role="menubar"] > *:has(input)';
+  // THE top bar. A bare `[role="menubar"]` is not one node: measured 2026-10-31 at
+  // 1512x949, an album (/album/…), a shared album (/share/…), search results
+  // (/search/…) and /apps each render a SECOND menubar inside `[role="main"]` — Back,
+  // Share, Add photos, More options — with no account cluster. 4.8.0's bare anchor made
+  // that toolbar fixed and click-through, and rule 3 hid BOTH of its children
+  // (display:none, 0x0). Scoped by the account link, the same page matches exactly 1
+  // menubar, 0 of them inside main. Every bar rule below hangs off this one.
+  const SEL_TOPBAR = '[role="menubar"]:has(a[href*="SignOutOptions"])';
+  const SEL_ACCOUNT = SEL_TOPBAR + ' > *:has(a[href*="SignOutOptions"])';
+  const SEL_TOOLS = SEL_TOPBAR + ' > *:has(input)';
   // The Google apps grid. Anchored on the href's stable path segment, not the host:
   // the domain is regional (google.ca here) and `intl/en` is localised, but
   // `about/products` is the same everywhere.
-  const SEL_APPS = '[role="menubar"] a[href*="about/products"]';
+  const SEL_APPS = SEL_TOPBAR + ' a[href*="about/products"]';
 
   // The Memories carousel — the 1216x248 strip of "8 years ago" cards above the grid.
   // TWO conditions, and the second is not belt-and-braces decoration: measured
@@ -156,14 +165,57 @@
   // (measured: 0x0), and its full-bleed geometry returns on close with one kick.
   const VIEWER_ATTR = 'data-nix-photos-viewer';
   const VIEWER_ROUTE = /\/photo\//;
-  const ON = ':root[' + SHELL_ATTR + '="on"]:not([' + VIEWER_ATTR + ']) ';
+
+  // Sub-pages render STOCK too, for the viewer's reason. Measured 2026-10-31, stock, at
+  // 1512x949: an album, a shared album, search results and /apps are full-window views
+  // whose own toolbar covers the top bar (elementFromPoint over the avatar returns the
+  // sub-page layer) and whose nav Photos itself sets `visibility:hidden`. So there is no
+  // drawer to offer — and our burger, fixed at (8,8) 48x48, sat EXACTLY on the
+  // sub-page's Back button (8,8 48x48), while rule 2 floated the avatar over its two
+  // rightmost controls. Scoping the bar rules (SEL_TOPBAR) stops the toolbar being
+  // hidden; this gate stops our chrome covering it.
+  //
+  // Gated by DOM, not route, because the set of such routes is Google's to grow: a
+  // census of every nav link found two more (/documents/<category>, and the
+  // Favorites / Videos / Recently added shortcuts, which are /search/ routes). But NOT
+  // by presence: Photos keeps previously visited views mounted, hidden, so after
+  // album -> grid a stale sub-page menubar is still in the document at 0x0 inside a
+  // `visibility:hidden` main (measured: 4 mains, 2 sub-bars, 1 of them 1512 wide). The
+  // test is a sub-page menubar with a real box. Like the viewer gate it does not move
+  // the search group back: four round trips would exhaust MOVE_BUDGET.
+  //
+  // Never on the grid route itself. The viewer's own toolbar is a sub-page menubar
+  // too, and on close it keeps its 1512px box for a moment (measured: still there at
+  // 300ms, gone by 1000ms), structurally identical to an album's — same attributes,
+  // same ancestors. Without this exclusion, closing a photo held the grid stock until
+  // the next sweep tick. The grid route is the one view that is never a sub-page, so
+  // it is exempt outright. On other routes (an archive photo closed back to /archive,
+  // say) the same linger can hold stock until a later sweep tick — ~1.9s at worst,
+  // DERIVED from the sweep schedule (200+500+1200ms), not measured.
+  const SUBPAGE_ATTR = 'data-nix-photos-subpage';
+  const SEL_SUBBAR = '[role="main"] [role="menubar"]';
+  // `/`, `/u/2`, `/u/2/` — the photo grid, with or without an account prefix.
+  const GRID_ROUTE = /^(?:\/u\/\d+)?\/?$/;
+
+  const STOCK_VIEWS = ':not([' + VIEWER_ATTR + ']):not([' + SUBPAGE_ATTR + '])';
+  const ON = ':root[' + SHELL_ATTR + '="on"]' + STOCK_VIEWS + ' ';
+
+  // Below Photos' own breakpoint the whole redesign stands down. Bisected 2026-10-31
+  // with an emulated viewport: at 1008 the nav is the 256px labelled list and the bar's
+  // search input is 448x48; at 1007 the nav is an 80px icon rail and the input is 0x0,
+  // collapsed behind a button. It is the `screen and (max-width: 1007px)` block — the
+  // very block v2/v3 lifted — so the query below is Photos' own string, not a guess.
+  // Under it 4.8.0 parked a 256px drawer's worth of controls in an 80px rail: Create
+  // at x=-63, Help at x=-23, the apps proxy clipped. Stock there is Photos' own narrow
+  // layout, which works; relocating the collapsed search would reproduce v3's dead one.
+  const NARROW_QUERY = 'screen and (max-width: 1007px)';
 
   // A SECOND gate, for the one rule that hides by elimination (rule 3). Set only once
   // the tools group is provably sitting in our host, so the blanket hide can never
   // outlive the relocation that justifies it. See rule 3 for the failure this closes.
   const TOOLS_ATTR = 'data-nix-photos-tools';
   const ON_MOVED =
-    ':root[' + SHELL_ATTR + '="on"][' + TOOLS_ATTR + '="moved"]:not([' + VIEWER_ATTR + ']) ';
+    ':root[' + SHELL_ATTR + '="on"][' + TOOLS_ATTR + '="moved"]' + STOCK_VIEWS + ' ';
 
   // Every rule is scoped under an attribute this script sets only once all three
   // anchors above actually resolve. That is the difference between degrading to stock
@@ -267,8 +319,8 @@
     //    right edge of a 1512 viewport, so Photos' own bar is already a flex line and
     //    rule 5's auto margin lands in it. Forcing `display:flex` would alter a
     //    configuration that was verified working.
-    ON +
-      '[role="menubar"]{position:fixed!important;top:0!important;left:0!important;' +
+    ON + SEL_TOPBAR +
+      '{position:fixed!important;top:0!important;left:0!important;' +
       'right:0!important;background:transparent!important;box-shadow:none!important;' +
       'pointer-events:none!important;z-index:470!important}',
 
@@ -295,8 +347,8 @@
     //    the gate is what makes that safe. `:not(:has(input))` stays as well, so a
     //    FRESH tools group rebuilt into the bar while the attribute is still "moved"
     //    stays visible and clickable until the next apply() re-homes it.
-    ON_MOVED +
-      '[role="menubar"] > *:not(:has(a[href*="SignOutOptions"])):not(:has(input))' +
+    ON_MOVED + SEL_TOPBAR +
+      ' > *:not(:has(a[href*="SignOutOptions"])):not(:has(input))' +
       '{display:none!important}',
 
     // 4. Only reachable before (or instead of) relocation. Re-enabled at the DIRECT
@@ -304,12 +356,11 @@
     //    enumerating `a,button,input,[role=button],[role=combobox]` left the field
     //    unclickable because the hit lands on a wrapper div that inherited `none` and
     //    the click fell through to the grid.
-    ON + '[role="menubar"] > *:has(input){pointer-events:auto!important}',
+    ON + SEL_TOOLS + '{pointer-events:auto!important}',
 
     // 5. The avatar is the one control that stays in the bar. Logical margin, not
     //    `margin-left`, so an RTL locale pushes it to the correct edge.
-    ON +
-      '[role="menubar"] > *:has(a[href*="SignOutOptions"])' +
+    ON + SEL_ACCOUNT +
       '{pointer-events:auto!important;margin-inline-start:auto!important}',
 
     // 6. The nav becomes the drawer. `translateX(-110%)` + `visibility:hidden`, NOT
@@ -317,17 +368,16 @@
     //    absent, the transition has something to animate, and — the accessibility half
     //    — `visibility:hidden` still removes its descendants from the tab order, so
     //    the closed drawer (search field included) cannot be tabbed into. Measured
-    //    closed x=-282, open x=0, width 256, items 225-232px wide (labelled).
+    //    2026-10-31: closed x=-563, open x=0, width 256 — -563 is BOTH offsets below
+    //    applied at once (2 x -281.6), see the translate note.
     //    `overflow-x:hidden;overflow-y:auto` because the relocated search row adds
     //    ~88px above a list that already filled 885px; `overscroll-behavior:contain`
     //    stops a flick at the end of the drawer from scrolling the photo grid behind.
     //
-    //    NOT set here: a background. Photos' nav has never been an overlay, so it is
-    //    not guaranteed to paint its own surface — but whether it does was NEVER
-    //    measured (the dossier records the nav's geometry, not its background), and
-    //    the fix for a guess is a measurement, not a colour invented at runtime and
-    //    written onto Google's element. If the drawer ever reads as see-through over
-    //    the scrim, measure the computed background first and put the finding here.
+    //    NOT set here: a background, because none is needed. Measured 2026-10-31 with
+    //    the drawer open: the nav paints its own opaque surface, computed
+    //    rgb(30, 31, 32) (#1e1f20, `surface-container`). Should a future Photos drop
+    //    it, measure first; do not invent a colour onto Google's element.
     //    Off-canvas via the `translate` LONGHAND, not `transform`, and that is a
     //    correctness fix rather than a style preference. Measured 2026-09-12: Photos runs
     //    a Web Animation on the nav's `transform` (getAnimations() -> one running effect
@@ -340,8 +390,11 @@
     //    `translate` is a separate longhand that composes with `transform` rather than
     //    competing for it, so Google's animation cannot touch it: measured x=-282 closed
     //    and x=0 open with their animation still pinning transform to identity. The
-    //    `transform` line is kept BELOW it purely as the fallback for an engine without
-    //    `translate` (CSS.supports said true here); where both work, translate decides.
+    //    `transform` line is kept as the fallback for an engine without `translate`.
+    //    Where both work they do NOT pick a winner — they compose: once Google's
+    //    animation is not running, both apply and the closed drawer sits at -220%
+    //    (x=-563, measured 2026-10-31). Harmless — still off-canvas and hidden — and the
+    //    open rule clears both.
     ON +
       '[role="navigation"]{position:fixed!important;top:0!important;bottom:0!important;' +
       'inset-inline-start:0!important;height:auto!important;max-height:none!important;' +
@@ -359,7 +412,7 @@
 
     // 8. Open state. The drawer floats over photographs, so it needs its own edge —
     //    Photos' nav ships none, having never been an overlay.
-    ':root[' + SHELL_ATTR + '="on"][' + DRAWER_ATTR + '="open"]:not([' + VIEWER_ATTR + '])' +
+    ':root[' + SHELL_ATTR + '="on"][' + DRAWER_ATTR + '="open"]' + STOCK_VIEWS +
       ' [role="navigation"]' +
       '{transform:none!important;translate:none!important;visibility:visible!important;' +
       'box-shadow:0 0 28px rgba(0,0,0,.34)!important}',
@@ -415,11 +468,13 @@
     // Settings buttons Photos wraps onto row two, so it is absolutely positioned against
     // the host rather than appended into Google's flex row — appending into that row
     // would make our node a child of a container Photos re-renders, and it would be gone
-    // on the next pass. bottom/inset-inline-start place it after the third 40px button
-    // plus the row's 12px padding; `inset-inline-start` rather than `left` so an RTL
-    // locale mirrors with the rest of the drawer.
+    // on the next pass. `inset-inline-start` rather than `left` so an RTL locale
+    // mirrors with the rest of the drawer. The offsets are measured, 2026-10-31, drawer
+    // open: Create 20-60 and Help 60-100 are 40px buttons, but Settings is a 48px anchor
+    // at 96-144 (y 140-188). 4.8.0's 132px start overlapped it by 12px. 144 starts at
+    // its edge; bottom 12px puts the proxy at y 144-184, centred on Settings' 164.
     '.nix-photos-searchhost{position:relative}',
-    '.nix-photos-apps{position:absolute;bottom:8px;inset-inline-start:132px;width:40px;' +
+    '.nix-photos-apps{position:absolute;bottom:12px;inset-inline-start:144px;width:40px;' +
       'height:40px;border:0;border-radius:50%;background:transparent;color:CanvasText;' +
       'cursor:pointer;padding:0;display:grid;grid-template-columns:repeat(3,4px);' +
       'grid-auto-rows:4px;gap:3px;place-content:center;justify-items:center}',
@@ -460,10 +515,12 @@
     '.nix-photos-burger span{display:block;width:18px;height:2px;border-radius:2px;' +
       'background:currentColor;box-shadow:0 -6px 0 currentColor,0 6px 0 currentColor}',
 
-    // Our own chrome stands down with the shell rules in the viewer. Hidden rather than
+    // Our own chrome stands down with the shell rules in the viewer and on sub-pages. Hidden rather than
     // removed: the nodes stay put, so closing the viewer costs no re-append.
     ':root[' + VIEWER_ATTR + '] .nix-photos-burger,' +
-      ':root[' + VIEWER_ATTR + '] .nix-photos-scrim{display:none!important}',
+      ':root[' + VIEWER_ATTR + '] .nix-photos-scrim,' +
+      ':root[' + SUBPAGE_ATTR + '] .nix-photos-burger,' +
+      ':root[' + SUBPAGE_ATTR + '] .nix-photos-scrim{display:none!important}',
 
     // Motion is an affordance, not decoration — but it is also a vestibular trigger.
     '@media (prefers-reduced-motion:reduce){' +
@@ -602,7 +659,7 @@
       return;
     }
     const home =
-      movedParent !== null && movedParent.isConnected ? movedParent : q(SEL_BAR);
+      movedParent !== null && movedParent.isConnected ? movedParent : q(SEL_TOPBAR);
     if (home !== null) {
       const before = movedNext !== null && movedNext.parentNode === home ? movedNext : null;
       home.insertBefore(node, before);
@@ -681,6 +738,15 @@
 
   const onKeydown = (event) => {
     if (event.key !== 'Escape' || !isOpen()) return;
+    // A widget that is itself expanded owns this Escape. Measured 2026-10-31: with the
+    // relocated search focused, its suggestions listbox open (225x378, inside the nav)
+    // and the combobox at aria-expanded="true", ONE trusted Escape closed the
+    // suggestions AND the drawer. This listener is capture-phase, so it runs before
+    // Photos' own and still reads "true"; standing aside here gives the expected two
+    // steps — first Escape closes the suggestions, the second closes the drawer.
+    const target = event.target;
+    if (target !== null && typeof target.getAttribute === 'function' &&
+        target.getAttribute('aria-expanded') === 'true') return;
     // Close, but never swallow the key: Photos owns Escape elsewhere (the item viewer,
     // its own dialogs) and a capture-phase preventDefault here would break them.
     setOpen(false);
@@ -867,24 +933,44 @@
     return true;
   };
 
-  // Returns true on a transition either way: entering re-measures the viewer, and
+  // Returns true on a transition either way: entering re-measures the view, and
   // leaving re-measures the grid back to full bleed — both through the caller's kick.
-  const syncViewer = () => {
-    const inViewer = VIEWER_ROUTE.test(location.pathname);
-    if (inViewer === root.hasAttribute(VIEWER_ATTR)) return false;
-    if (inViewer) {
+  const syncStockView = (attr, inView) => {
+    if (inView === root.hasAttribute(attr)) return false;
+    if (inView) {
       // keepFocus: the burger focus would be restored to is about to be display:none.
       if (isOpen()) setOpen(false, { keepFocus: true });
-      root.setAttribute(VIEWER_ATTR, '');
+      root.setAttribute(attr, '');
     } else {
-      root.removeAttribute(VIEWER_ATTR);
+      root.removeAttribute(attr);
     }
     return true;
   };
 
+  const subpageShown = () => {
+    for (const bar of document.querySelectorAll(SEL_SUBBAR)) {
+      if (bar.getBoundingClientRect().width > 0) return true;
+    }
+    return false;
+  };
+
+  const narrowMq =
+    typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null;
+
   const apply = () => {
     let changed = ensureStyle();
-    if (syncViewer()) changed = true;
+
+    // Narrow: stand ALL the way down, search group home included — Photos' own narrow
+    // bar needs it. The relocation budget is for Photos fighting us, not for the
+    // operator resizing, so a deliberate stand-down hands it back.
+    if (narrowMq !== null && narrowMq.matches) {
+      moveCount = 0;
+      return standDown() || changed;
+    }
+
+    if (syncStockView(VIEWER_ATTR, VIEWER_ROUTE.test(location.pathname))) changed = true;
+    const subpage = !GRID_ROUTE.test(location.pathname) && subpageShown();
+    if (syncStockView(SUBPAGE_ATTR, subpage)) changed = true;
 
     const bar = q(SEL_BAR);
     const account = q(SEL_ACCOUNT);
@@ -975,6 +1061,10 @@
   const SWEEP_DELAYS = [200, 500, 1200, 2500, 5000];
   let sweepIndex = 0;
   let sweepTimer = null;
+  // A route change runs the sweep to the end instead of stopping once settled: the
+  // shell is already up, so `settled()` is true at once, but a sub-page's toolbar is
+  // built AFTER the navigation event, and the sub-page gate has to see it arrive.
+  let sweepFull = false;
 
   const settled = () =>
     root.getAttribute(SHELL_ATTR) === 'on' && moved !== null && moved.isConnected;
@@ -992,14 +1082,20 @@
     sweepTimer = setTimeout(() => {
       sweepTimer = null;
       applyAndKick();
-      if (!settled()) stepSweep();
+      if (sweepFull || !settled()) stepSweep();
     }, delay);
   };
 
-  const armSweep = () => {
+  const armSweep = (full = false) => {
     stopSweep();
     sweepIndex = 0;
+    sweepFull = full === true;
     stepSweep();
+  };
+
+  const onRoute = () => {
+    applyAndKick();
+    armSweep(true);
   };
 
   // documentElement gains ~two children in its life, so this is nearly free — and
@@ -1009,20 +1105,18 @@
   // body's CHILDREN — which would take our burger and scrim with it — fires nothing
   // here.
   //
-  // The sweep below is re-armed on `popstate`, which covers BACK/FORWARD ONLY.
-  // pushState and replaceState emit no event, so a FORWARD in-app navigation is not
-  // covered by anything here — say so plainly rather than implying the sweep is a
-  // general recovery.
+  // Navigation is covered below, not here: since 4.8.0 the Navigation API's
+  // `currententrychange` fires for pushState, replaceState AND back/forward, and each
+  // one re-runs apply() and a full sweep (`popstate` is kept for engines without it).
   //
-  // That gap is currently theoretical, and the measurement is why it is left alone:
-  // 2026-09-12, drawer opened and `./albums` clicked from inside it, then sampled at
-  // 2 / 4 / 8 / 12s — path went to /u/2/albums and `.nix-photos-burger` and
-  // `.nix-photos-scrim` BOTH stayed `isConnected`, the shell attribute stayed "on",
-  // the drawer stayed closed at x=-282 and the pane stayed 1512 wide. So on this route
-  // Photos does not replace body's children at all, and the premise inherited from v3
-  // is unproven for forward navigation. If a route is ever found where our chrome does
-  // disappear, the fix is one line — call armSweep() from onClick beside setOpen(false)
-  // — not a body subtree observer, which is the one thing this file must never add.
+  // Whether Photos ever replaces body's children on navigation is still unproven, and
+  // the measurement is why no more than that is done: 2026-09-12, drawer opened and
+  // `./albums` clicked from inside it, then sampled at 2 / 4 / 8 / 12s —
+  // `.nix-photos-burger` and `.nix-photos-scrim` BOTH stayed `isConnected`, the shell
+  // attribute stayed "on", the drawer stayed closed and the pane stayed full width.
+  // If a route is ever found where our chrome does disappear, the sweep each navigation
+  // now arms re-appends it — never a body subtree observer, which is the one thing this
+  // file must never add.
   const rootObserver = new MutationObserver(() => {
     watchHead();
     applyAndKick();
@@ -1040,7 +1134,7 @@
   window.addEventListener('load', applyAndKick, { once: true });
   // Back/forward inside the SPA can land on a view with a freshly built bar. Cheap,
   // passive, and no history patching — we re-check rather than assume.
-  window.addEventListener('popstate', armSweep);
+  window.addEventListener('popstate', onRoute);
   document.addEventListener('keydown', onKeydown, true);
   document.addEventListener('click', onClick, true);
 
@@ -1052,10 +1146,15 @@
   const nav$ = typeof window.navigation === 'object' ? window.navigation : null;
   const onRouteHint = () => window.setTimeout(applyAndKick, 60);
   if (nav$ !== null && typeof nav$.addEventListener === 'function') {
-    nav$.addEventListener('currententrychange', applyAndKick);
+    nav$.addEventListener('currententrychange', onRoute);
   } else {
     document.addEventListener('click', onRouteHint, true);
     document.addEventListener('keydown', onRouteHint, true);
+  }
+  // Crossing Photos' breakpoint emits no resize we listen to; the media query's own
+  // `change` is the one event that fires exactly there, once per crossing.
+  if (narrowMq !== null && typeof narrowMq.addEventListener === 'function') {
+    narrowMq.addEventListener('change', applyAndKick);
   }
 
   // ---- Teardown ---------------------------------------------------------------
@@ -1070,11 +1169,14 @@
 
     window.removeEventListener('DOMContentLoaded', applyAndKick);
     window.removeEventListener('load', applyAndKick);
-    window.removeEventListener('popstate', armSweep);
+    window.removeEventListener('popstate', onRoute);
     document.removeEventListener('keydown', onKeydown, true);
     document.removeEventListener('click', onClick, true);
     if (nav$ !== null && typeof nav$.removeEventListener === 'function') {
-      nav$.removeEventListener('currententrychange', applyAndKick);
+      nav$.removeEventListener('currententrychange', onRoute);
+    }
+    if (narrowMq !== null && typeof narrowMq.removeEventListener === 'function') {
+      narrowMq.removeEventListener('change', applyAndKick);
     }
     document.removeEventListener('click', onRouteHint, true);
     document.removeEventListener('keydown', onRouteHint, true);
@@ -1096,6 +1198,7 @@
     root.removeAttribute(SHELL_ATTR);
     root.removeAttribute(TOOLS_ATTR);
     root.removeAttribute(VIEWER_ATTR);
+    root.removeAttribute(SUBPAGE_ATTR);
     if (burger !== null) burger.remove();
     if (scrim !== null) scrim.remove();
     burger = null;

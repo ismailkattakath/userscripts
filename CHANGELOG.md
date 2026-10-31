@@ -103,6 +103,67 @@ and the clocks appeared.
 
 ## google-photos-icon-nav
 
+### [4.9.0] - 2026-10-31
+
+#### Fixed
+
+- **Album, shared-album, search-results and app-download toolbars work again.**
+  Those views render a second `[role="menubar"]` inside `[role="main"]`, with
+  Back, Share, Add photos and More options and no account cluster. 4.8.0's bar
+  rules matched any menubar, so this toolbar went fixed and click-through and
+  both of its children were hidden. The bar rules now anchor on the menubar that
+  holds the account link only.
+- **Our burger no longer covers a sub-page's Back button.** Both sat at (8,8)
+  48x48. These sub-pages are full-window views whose own toolbar covers the top
+  bar, and Photos hides its nav there. So, like the photo viewer, they now render
+  stock: the shell and our burger stand down while a visible sub-page toolbar is
+  on screen. Hidden, cached views do not count; Photos keeps them mounted at 0x0.
+  The gate reads the DOM, not a route list: a census of the nav found the same
+  toolbar on `/documents/<category>` and on the Favorites, Videos and Recently
+  added shortcuts too. The grid route itself is exempt, because the photo
+  viewer's toolbar lingers for a moment after it closes.
+- **Below 1008px wide the script stands down.** Photos switches to an 80px icon
+  rail at its own `screen and (max-width: 1007px)` breakpoint. The drawer's
+  controls then landed off-screen (Create at x=-63, Help at x=-23, at ~700px). The script
+  now follows that same media query and puts the search field back in the bar.
+- **The Google apps button no longer overlaps Settings.** Settings is a 48px
+  anchor at 96-144. The proxy started at 132; it now starts at 144.
+- **Escape closes the search suggestions first.** One Escape used to close the
+  suggestions and the drawer together. The drawer now ignores an Escape aimed
+  at an element that is itself `aria-expanded="true"`.
+- Comments corrected: navigation coverage (`currententrychange` covers pushState
+  since 4.8.0), the closed drawer's x (-563, both offsets composing), and the
+  drawer's background (measured, below).
+
+#### Verified live (1512x949 unless stated, signed in, Chromium + Violentmonkey)
+
+| Check | 4.8.0 | 4.9.0 |
+|---|---|---|
+| Album toolbar: hidden children / controls hit-testable | 2 / 0 of 0 | 0 / 6 of 6 |
+| Shared album toolbar controls hit-testable | not measured | 6 of 6 |
+| Search results toolbar controls hit-testable | 0 (both children hidden) | 2 of 2 |
+| App-downloads toolbar controls hit-testable | 0 (child hidden) | 1 of 1 |
+| Burger on a sub-page | visible over Back | hidden |
+| Grid: pane / avatar hit / closed drawer x | 1512x949 / yes / -563 | 1512x949 / yes / -563 |
+| 1007px wide: nav / search input in bar / our chrome | Create x=-63, Help x=-23 (at ~700px) | 80px rail, in bar, none |
+| 1008px wide: shell / open drawer controls off-screen | on / — | on / 0 |
+| Apps proxy vs Settings (x) | 132-172 vs 96-144 | 144-184 vs 96-144 |
+| Escape #1 with suggestions open (225x378 listbox) | closed both | suggestions only |
+| Escape #2 | — | drawer closed, focus on burger |
+
+- Sub-page toolbar control positions under 4.9.0 equal the stock (script
+  torn down) positions on the same album.
+- Album to grid and back by in-app navigation: the sub-page gate turns on and
+  off, and the grid returns to 1512 wide with the burger.
+- Photo opened from the grid, then closed: the grid is back to 1512 wide with
+  the burger 100 ms later. Photo opened from an album, then closed: the album
+  stays stock (gate on, burger hidden) at 300 ms and 2.8 s.
+- 9 narrow-to-wide resizes in a row: the search field is still relocated after
+  the last one.
+- The drawer's own background, measured open: `rgb(30, 31, 32)`.
+
+## google-photos-icon-nav
+
 ### [4.8.0] - 2026-10-26
 
 #### Fixed

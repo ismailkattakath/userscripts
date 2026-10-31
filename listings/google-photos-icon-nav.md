@@ -1,6 +1,6 @@
 ## What it does
 
-**Google Photos, with the photos taking the whole window.**
+**Google Photos, with the photos taking the whole window** — in any window 1008px or wider.
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -23,7 +23,13 @@
 - Photos' own labelled nav is held **off-canvas as a drawer** behind a fixed hamburger — and **search, Create, Help, Settings and the Google apps launcher are relocated into that drawer, where they keep working**
 - the memories row, the date headings and the year scrubber are dropped
 
-Nothing is rebuilt: every control is the site's own, moved, with its own handlers intact. Keyboard focus order, labels and Escape still work.
+Nothing is rebuilt: every control on the main grid is the site's own, moved, with its own handlers intact. Keyboard focus order and labels still work, and Escape closes the search suggestions first and the drawer second.
+
+Everywhere else Photos is left exactly as Google ships it:
+
+- **albums, shared albums, search results (Favorites, Videos and Recently added included), document categories and the app-downloads page** keep their own toolbar (Back, Share, Add photos, More options) — those views already cover the whole window
+- **an opened photo or video** shows Google's own viewer
+- **below 1008px wide**, where Photos switches to its own compact icon rail, the script stands down entirely
 
 ## What it does not do
 
@@ -38,6 +44,7 @@ Nothing else on Greasy Fork targets photos.google.com structurally — the exist
 ## Known limits
 
 - Google Photos ships obfuscated, generated class names that change without notice, so **every anchor here is an ARIA role or an `href`** — never a class. When Google does change something, the affected rule stops matching and that part renders stock; the page is never mangled.
+- The redesign applies to the main photo grid in windows 1008px and wider; see the list above for where it deliberately stays out of the way.
 - Built and verified on Chromium with Violentmonkey.
 
 ## Privacy
