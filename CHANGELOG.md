@@ -23,6 +23,18 @@ Entries are grouped by script. Within a release, use the
   fast-forwarded onto the `published` branch, which Greasy Fork's webhook syncs
   from. A version bump ships on merge, with no paste step.
 
+## civitai-declutter
+
+### [2.0.2] - 2026-10-31
+
+#### Removed
+
+- **Comments for selectors the file no longer ships.** The class-name table
+  listed `gridInner`/`gridCol` and `_stack`, and the model-page block list
+  described the sidebar and title-stack rules; 2.0.0 removed those rules. Only
+  comments changed (two of them inside the injected CSS); no selector, rule or
+  behaviour changed.
+
 ## youtube-share-to-metube
 
 ### [3.0.0] - 2026-10-31
