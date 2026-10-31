@@ -39,6 +39,21 @@ Entries are grouped by script. Within a release, use the
 
 ## youtube-share-to-metube
 
+### [2.1.1] - 2026-10-31
+
+#### Fixed
+
+- **Share stayed Share on a fresh page load.** YouTube now draws the Share
+  button after its last `yt-page-data-updated` event (~3.5 s into a full load,
+  measured). The script tried for 40 frames, then waited for a navigation event
+  that never came. The selectors and icon path still matched. Dispatching that
+  one event by hand marked the button at once, so only the trigger was missing.
+  When the 40 frames run out, a `MutationObserver` on the document now keeps
+  watching. It runs only while the button is missing, and it batches each burst
+  of DOM changes into one check per frame.
+
+## youtube-share-to-metube
+
 ### [2.1.0] - 2026-09-22
 
 #### Fixed

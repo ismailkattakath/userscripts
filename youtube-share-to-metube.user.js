@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.1.0
+// @version      2.1.1
 // @description  Turns the Share button on a YouTube watch page into a Store button that hands the video to a MeTube instance on 127.0.0.1:8081 instead of opening the share sheet. A plain click stores the audio as mp3; Alt-click stores the video as mp4, and the chip names which before it sends, then reports Stored or Failed. Sharing stays in the ⋯ menu. One local request, no token, no third-party host.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -220,6 +220,7 @@
   let retries = 0;
   let rowObserver = null;
   let rowHost = null;
+  let barObserver = null;
   let tipObserver = null;
 
   const ac = new AbortController();
@@ -398,14 +399,34 @@
 
     const button = shareButton();
     if (!button) {
-      // The bar has not been built yet, or the glyph is gone. Either way the
-      // ladder expires and the page stays stock.
+      // The bar has not been built yet, or the glyph is gone. The ladder covers
+      // the usual case; once it runs out, the page itself is watched instead.
       if (retries++ < RETRY_FRAMES) schedule();
+      else awaitBar();
       return;
     }
     retries = 0;
+    stopAwaitingBar();
     takeOver(button);
     watchRow(button);
+  }
+
+  // Measured 2026-10-31 on a full load of /watch: YouTube fired its last
+  // yt-page-data-updated at ~3.5 s and drew the Share button AFTER it, with no
+  // navigation event left to come. The 40-frame ladder had long expired, so the
+  // button stayed stock until the next client-side navigation. Firing that one
+  // event by hand marked it at once, so selectors were never the problem — only
+  // the trigger. This observer is that trigger. It lives only while the button is
+  // missing, and every mutation burst collapses into one frame through schedule().
+  function awaitBar() {
+    if (torn || barObserver) return;
+    barObserver = new MutationObserver(schedule);
+    barObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function stopAwaitingBar() {
+    if (barObserver) barObserver.disconnect();
+    barObserver = null;
   }
 
   function schedule() {
@@ -522,6 +543,7 @@
     if (rowObserver) rowObserver.disconnect();
     rowObserver = null;
     rowHost = null;
+    stopAwaitingBar();
     releaseTooltip();
 
     for (const [button, state] of original) {
