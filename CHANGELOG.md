@@ -160,6 +160,31 @@ control it takes over changed.
 
 ## civitai-declutter
 
+### [1.26.0] - 2026-10-31
+
+#### Changed
+
+- **The header autohides instead of being hidden for good.** Hiding it took
+  Sign In, search, the account menu (settings, browsing level, sign out),
+  notifications and Create with it, so a signed-out visitor had no way to sign
+  in (operator report). It now hides while you scroll down and comes back when
+  you scroll up, and it is always shown near the top. The rules match
+  thumbwall's top bar. The mechanism differs because Civitai's header is a
+  static flex item above the one scrolling column, not a fixed bar: its slot
+  collapses through a negative top margin of its measured height, animated
+  over 180 ms, instead of being translated away and leaving a blank band.
+  Focus inside the header also shows it, but only after a real keydown or
+  pointerdown.
+
+#### Verified live
+
+Signed out, 1280px, /images: header shown at the top, hidden after 1500px of
+downward scroll, back after 180px up, hidden again on the next scroll down,
+shown at the top. A trusted click on Sign In opened the login page (Discord,
+Google, GitHub, email link). Two injections leave one stylesheet; 8 scroll
+steps made 1 attribute write; teardown leaves no attribute, no custom property
+and a 0px margin.
+
 ### [1.25.1] - 2026-10-31
 
 #### Fixed
