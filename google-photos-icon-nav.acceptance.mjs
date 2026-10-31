@@ -22,6 +22,10 @@ export const script = './google-photos-icon-nav.user.js';
 
 const NAV = '[role="navigation"]';
 const BAR = '[role="menubar"]';
+// Bar CHILD counts use the top bar only. Photos keeps visited views mounted, so after
+// the viewer step two cached 0x0 viewer menubars add 4 children to a bare count
+// (measured 2026-10-31: top bar 3 children, stock and after teardown).
+const TOPBAR = '[role="menubar"]:has(a[href*="SignOutOptions"])';
 const PANE = 'div:has(> [role="main"])';
 const BURGER = '.nix-photos-burger';
 const AVATAR = '[role="menubar"] a[href*="SignOutOptions"]';
@@ -47,7 +51,7 @@ export default async function run(t) {
       w:Math.round(b.width),h:Math.round(b.height)}};
     return {nav:R('${NAV}'), pane:R('${PANE}'),
       searchInBar:!!document.querySelector('${BAR} input'),
-      barKids:document.querySelectorAll('${BAR} > *').length}})()`);
+      barKids:document.querySelectorAll('${TOPBAR} > *').length}})()`);
 
   await t.inject();
   await navX(t);
@@ -307,11 +311,11 @@ export default async function run(t) {
       w:Math.round(b.width),h:Math.round(b.height)}};
     return {nav:R('${NAV}'), pane:R('${PANE}'),
       searchBackInBar:!!document.querySelector('${BAR} input'),
-      barKids:document.querySelectorAll('${BAR} > *').length,
+      barKids:document.querySelectorAll('${TOPBAR} > *').length,
       ourChrome:document.querySelectorAll('[class*="nix-photos"]').length,
       ourStyle:document.querySelectorAll('style[data-nix-google-photos-rail]').length,
       attrs:['data-nix-photos-drawer','data-nix-photos-shell','data-nix-photos-tools',
-        'data-nix-photos-viewer']
+        'data-nix-photos-viewer','data-nix-photos-subpage']
         .filter(a=>document.documentElement.hasAttribute(a))}})()`);
   t.check('teardown: nav back to stock position',
     after.nav && after.nav.x === stock.nav.x && after.nav.w === stock.nav.w,
