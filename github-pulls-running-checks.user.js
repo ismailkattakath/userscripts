@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub — running checks in the PR hovercard
 // @namespace    kattakath.com
-// @version      2.5.1
+// @version      2.5.2
 // @description  Adds a checks section to GitHub's own PR hovercard, anywhere one appears: failed jobs named, jobs in progress with a live elapsed clock, grouped by workflow, with the push/pull_request twins merged into one entry instead of listed twice. Same-origin requests only, no token, no second popup.
 // @author       Ismail Kattakath
 // @license      MIT
@@ -13,8 +13,7 @@
 // @noframes
 // ==/UserScript==
 
-// The problem, measured 2026-09-11 on
-// github.com/Infin8-Information-Technologies/takeoff-api-infra/pulls (live DOM,
+// The problem, measured 2026-09-11 on a busy private repo's pull-request list (live DOM,
 // logged in): a PR row's checks badge carried exactly one bit of information.
 // Its accessible name was the whole payload —
 //
