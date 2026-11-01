@@ -24,7 +24,9 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
   push:
-    branches: ['**']
+    # Dependabot's own pushes get no secrets, so this run could only fail;
+    # its PR is armed by the pull_request_target run instead.
+    branches-ignore: ['dependabot/**']
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch:
