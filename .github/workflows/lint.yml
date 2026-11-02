@@ -1,23 +1,53 @@
 name: lint
 
+# ONE REQUIRED CHECK: `gate` (shared, kattakath/.github). It always runs and asserts
+# that every job it `needs` ended EXACTLY as this event expects, so a skipped job can
+# never pass for a green one ("A job that is skipped will report its status as
+# Success", GitHub docs). `lint` and `parse` run on every PR here: this repo is owned
+# by a personal account, so GitHub offers it no merge queue and QUEUE_ENABLED stays
+# unset.
+#
+# `push: main` STAYS, and so does `name: lint`: publish.yml chains off this
+# workflow's push run on main (workflow_run, workflows: [lint]) to fast-forward
+# `published`. Dropping either would stop Greasy Fork receiving releases.
 on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 # A second push to the same PR cancels the first — CI minutes are not free and a
-# superseded run tells you nothing.
+# superseded run tells you nothing. Never cancel a queue or main run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  # THE ONLY REQUIRED CHECK. Its job id is part of the ruleset; never rename it or
+  # give it a `name:`.
+  gate:
+    if: ${{ !cancelled() }}
+    needs: [lint, parse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      # `expect` holds a deliberate SECOND copy of the heavy jobs' `if:`. If the two
+      # copies drift, gate goes red, so a bad edit fails closed.
+      - uses: kattakath/.github/actions/gate@3d5ad5b9e04c853dbb0d82446255c9ef9230332a
+        with:
+          needs: ${{ toJSON(needs) }}
+          expect: >-
+            {"lint": ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true' }},
+             "parse": ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true' }}}
+
   lint:
     name: eslint + meta
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -45,6 +75,7 @@ jobs:
 
   parse:
     name: node --check
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
