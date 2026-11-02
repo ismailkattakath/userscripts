@@ -1,0 +1,43 @@
+name: open-pr
+
+# Push a branch and the ismailkattakath-ci GitHub App opens its pull request,
+# titled from the head commit's first line, with the rest of the message as the
+# body. Arming and merging are not done here: auto-merge.yml arms every same-repo,
+# non-draft PR (this one included, since an App token's events DO start workflow
+# runs) and arm-dependabot.yml arms Dependabot's.
+#
+# Split out of the old automerge.yml when this repo moved onto the shared
+# kattakath/.github landing system; that system has no PR opener, so this stays.
+#
+# Excluded branches: `main` (nothing to open), Dependabot's (its own PRs, and its
+# pushes get no secrets), `published` (only ever trails main, see publish.yml).
+on:
+  push:
+    branches-ignore: [main, published, 'dependabot/**']
+
+permissions: {}
+
+jobs:
+  open:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0 (same pin as the shared auto-merge.yml)
+        id: app
+        with:
+          client-id: ${{ vars.CI_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.CI_BOT_APP_PRIVATE_KEY }}
+
+      - run: |
+          set -eu
+          open=$(gh pr list --repo "$REPO" --head "$REF_NAME" --state open --json number --jq 'length')
+          if [ "$open" != "0" ]; then echo "PR already open for $REF_NAME"; exit 0; fi
+          msg=$(gh api "repos/$REPO/commits/$SHA" --jq '.commit.message')
+          title=$(printf '%s\n' "$msg" | sed -n '1p')
+          body=$(printf '%s\n' "$msg" | sed '1,2d')
+          gh pr create --repo "$REPO" --head "$REF_NAME" --base main --title "$title" --body "$body"
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}

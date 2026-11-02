@@ -239,18 +239,21 @@ is why this repository must not carry them.
 
 ### How pull requests get opened and merged
 
-Nobody presses either button. The `automerge` workflow acts as the
-**ismailkattakath-ci** GitHub App:
+Nobody needs to press either button for the maintainer's own branches. The
+**ismailkattakath-ci** GitHub App does both:
 
-- **push a branch** (any name but `main`) and the bot **opens the pull request**
-  from the head commit's message - first line as title, the rest as body;
-- when `main`'s ruleset is satisfied (both required checks green:
-  `eslint + meta`, `node --check`; every review thread resolved) the bot
-  **squash-merges** it and deletes the branch;
-- dependabot's pull requests are merged the same way.
+- **push a branch** (any name but `main`) and the `open-pr` workflow **opens the
+  pull request** from the head commit's message - first line as title, the rest
+  as body;
+- the `auto-merge` workflow **arms squash auto-merge** on every same-repo,
+  non-draft pull request; `arm-dependabot` arms dependabot's on a schedule;
+- **`gate` is the only required check.** It passes only when every CI job ended
+  as expected (`eslint + meta` and `node --check` both green). With `gate` green
+  and every review thread resolved, GitHub squash-merges and deletes the branch.
 
-Only pull requests authored by the two bots are auto-merged. A pull request
-opened by a person is reviewed and merged by a maintainer once its checks pass.
+**Fork pull requests** run the full lint suite on the pull request itself, so a
+contributor sees a real failure before review. They are never auto-merged: a
+maintainer merges them after review.
 
 "Up to date with `main`" is deliberately **not** required. CI is one linter on
 one file with no runtime dependencies, so the only thing a stale branch can hide
