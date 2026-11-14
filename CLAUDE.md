@@ -63,16 +63,19 @@ Consumed as a **source-only flake input** (`flake = false`) by
 
 ## Commands
 
-The linter is **not on `PATH`**. Resolve it first — a bare glob would expand to
-several installed versions and pass the extras as lint targets:
+Use the repo's own pinned gates (the flake pins Node and ESLint, so every machine runs the
+same toolchain):
 
 ```bash
-lint=$(ls -d ~/.claude/plugins/cache/*/userscript-lab/*/scripts/userscript-meta-lint.sh | tail -1)
-
-bash "$lint" .                                 # the only gate; same script CI runs
-bash "$lint" google-photos-icon-nav.user.js    # single file
-node --check google-photos-icon-nav.user.js    # parse check only (what the lint wraps)
+nix run .#gates                                # eslint + meta + parse, in that order
+nix run .#meta                                 # Greasy Fork publish-readiness lint
+nix run .#meta -- google-photos-icon-nav.user.js   # single file
+nix run .#parse                                # node --check every .user.js
 ```
+
+Optional second opinion: inside the `userscript-lab` plugin, run
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/userscript-meta-lint.sh" .`. Do not glob the plugin cache
+for it: the cache directories are SHAs, so an alphabetical pick can be a stale install.
 
 Lint is not behaviour: lint and geometry both passed on the build that shipped a dead search.
 Verify on the real install (see "Verifying a change").
@@ -249,10 +252,9 @@ Traps that survive the move:
 
 ## Consumers and the install reality
 
-- `nix-config`'s `programs.ungoogledChromium.userScripts.scripts` materialises each script
-  into `~/.local/share/userscripts/<name>.user.js` with a generated `index.html`.
-- Nix owns the **files**; Violentmonkey owns the **database**. There is no declarative
-  import on Chromium.
+- Delivery is publish to Greasy Fork, then install in Violentmonkey in Chrome (or install
+  the raw `.user.js` directly). Violentmonkey owns the database; there is no declarative
+  import.
 - **An agent cannot install a script or flip a browser toggle** — that click is the
   operator's. Ask; don't attempt it.
 
