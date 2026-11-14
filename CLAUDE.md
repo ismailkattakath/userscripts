@@ -67,7 +67,7 @@ The linter is **not on `PATH`**. Resolve it first — a bare glob would expand t
 several installed versions and pass the extras as lint targets:
 
 ```bash
-lint=$(ls -d ~/.claude/plugins/cache/*/page-lab/*/scripts/userscript-meta-lint.sh | tail -1)
+lint=$(ls -d ~/.claude/plugins/cache/*/userscript-lab/*/scripts/userscript-meta-lint.sh | tail -1)
 
 bash "$lint" .                                 # the only gate; same script CI runs
 bash "$lint" google-photos-icon-nav.user.js    # single file
