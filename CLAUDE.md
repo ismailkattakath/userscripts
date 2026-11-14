@@ -34,12 +34,12 @@ What that changes about the work:
   CSS and tokens wherever it already ships what is wanted, construct only what it genuinely does
   not, and **degrade to stock** rather than mangle.
 - **Taste is measured, not asserted.** Geometry, contrast and hit-testing get verified on the live
-  page before they ship — see "Measuring the live page" below.
+  page before they ship — see "Verifying a change" below.
 - **Exercise the host's primary actions; don't just measure them.** Geometry proves a control is
   *present*, never that it *works*. v3.0.0 of `google-photos-icon-nav` passed every geometry and
   hit-test check and shipped with **search completely dead** — nobody had ever clicked it. A
   redesign is not verified until each primary action still works under a **trusted** event
-  (CDP `Input.dispatchMouseEvent`, not `el.click()`). For Photos that means: open the profile
+  (Claude in Chrome `computer` clicks, not `el.click()`). For Photos that means: open the profile
   menu, click into search and type, open an album.
 - **"Minimal changes" means minimal risk surface, not minimal diff.** Deleting machinery counts
   as minimal. v4 answered a "change as little as possible" request by removing roughly half the
@@ -54,8 +54,8 @@ Public Violentmonkey userscripts, **one `.user.js` per script at the repo root**
 no build, no package manager, no test runner — a userscript manager copies the file into
 extension storage **verbatim**, so whatever is committed is what runs.
 
-A `<name>.acceptance.mjs` beside a script is **data, not a runner**: page-lab owns the
-runner, this repo owns the assertions. That is what keeps the sentence above true.
+There is no runner or acceptance-spec file in this repo: verification is manual, on the real
+install (see "Verifying a change").
 
 Consumed as a **source-only flake input** (`flake = false`) by
 [`kattakath/nix-config`](https://github.com/kattakath/nix-config); this repo has no
@@ -74,20 +74,8 @@ bash "$lint" google-photos-icon-nav.user.js    # single file
 node --check google-photos-icon-nav.user.js    # parse check only (what the lint wraps)
 ```
 
-The **acceptance spec** is the gate the linter is not — lint and geometry both passed on the
-build that shipped a dead search. The runner lives in page-lab so this repo stays
-runner-free; the spec beside the script is just data:
-
-```bash
-pl=$(ls -d ~/.claude/plugins/cache/*/page-lab/*/scripts | tail -1)
-
-node "$pl/userscript-acceptance.mjs" --repeat 3 google-photos-icon-nav.acceptance.mjs
-```
-
-Needs Chromium on `:9222` with a Photos tab on the **grid** view — an album or item view
-builds a different shell. It scores 19/19 on the current build and 14/19 on 3.0.0, so it
-discriminates rather than rubber-stamping. Nothing imports it and nothing ships to Greasy
-Fork; the linter only walks `*.user.js`.
+Lint is not behaviour: lint and geometry both passed on the build that shipped a dead search.
+Verify on the real install (see "Verifying a change").
 
 CI equivalent lives **outside this repo**: `checks.<system>.userscripts` in
 `nix-config/modules/parts/checks.nix` runs the same linter against this repo's **pinned
@@ -229,57 +217,35 @@ It produced a real 80px icon rail. **Do not bring it back.** Measured 2026-09-12
 Recorded because it is a genuinely attractive idea that fails for a non-obvious reason. If a
 future change wants the compact header back, it has to solve the dead search first.
 
-## Measuring the live page
+## Verifying a change
 
-The doctrine says "measure first, never guess a selector" but never said *with what*. Chromium
-runs with `--remote-debugging-port=9222`; everything below is already installed.
+Claude in Chrome is the only browser rail; there is no CDP runner and no remote-debugging
+port. Measure and verify like this:
 
-```bash
-pl=$(ls -d ~/.claude/plugins/cache/*/page-lab/*/scripts | tail -1)
+1. Install the script in Violentmonkey. On Chrome 138+ this needs the one-time
+   **Allow User Scripts** toggle, which is the operator's click.
+2. Reload the target page (Photos: the **grid** view at `photos.google.com/u/<n>/`; an album
+   or item view builds a different shell).
+3. Check with Claude in Chrome: `javascript_tool` and `read_page` to inspect state, `computer`
+   to click and type. Its clicks and keys are **trusted** events, which is what catches a
+   control that is present and hit-testable but inert (the 3.0.0 dead search).
+4. **There is no document-start injection on this rail.** The page is already loaded when the
+   tools run, so anything that depends on `@run-at document-start` is verified by reloading
+   with the script installed, not by injecting it.
 
-bash "$pl/page-route.sh"          # FIRST — which browser route is up. Most "broken
-                                  # selector" reports are an unreachable browser.
-node "$pl/selector-verify.mjs" --target-id "$tid" '<sel>' ...
-bash "$pl/devtools-doctor.sh"     # triage when the route is down
-```
+Traps that survive the move:
 
-`selector-verify.mjs` returns `UNIQUE` / `AMBIGUOUS` / `DEAD` / **`GENERATED`** — that last
-verdict *mechanically enforces* the no-Google-class-names rule this file states in prose. Use
-it rather than eyeballing.
-
-**Three traps, all hit for real:**
-
-- **`--target-id` is not optional.** The default ("first page target") silently scores against
-  a Violentmonkey extension page — Chromium holds three page targets here. Same selectors,
-  same instant: `DEAD` without it, `UNIQUE` with it. A reader who trusts the default will
-  rewrite a working selector. Get the id from `curl -s localhost:9222/json/list`.
-- **Verify against a *stock* page.** Tear the script down first
-  (`window.__nixGooglePhotosTeardown?.()`). `[role="menubar"] > *:has(input)` reads `DEAD`
-  while the script is live — because the script already moved that node into the drawer. You
-  would be measuring your own output.
-- **`chrome-devtools-mcp` points at the wrong browser.** It is launched with
-  `--userDataDir=…/com.operasoftware.OperaAir`. The page under test is in **Chromium on
-  `:9222`**. Kapture (`mcp__kapture__*`) is also live but needs an operator click to attach a
-  tab — and its `kapture-N` ids are banned (see the linter table).
-
-**There is no generic "eval in page" tool.** page-lab ships a zero-dependency CDP client at
-`scripts/lib/cdp.mjs` (`browserSocket` / `connect` / `attach`); a ~30-line wrapper over it is
-the intended path, not a gap to fill with a library.
-
-**Injecting ≠ installing.** An agent cannot install, so it verifies by `eval`-ing the IIFE body
-via `Runtime.evaluate`. That differs from a real install in ways that produce **false
-failures**:
-
-- Strip the `// ==UserScript== … ==/UserScript==` block first — metadata, not JS.
-- Injected at `readyState: complete`, the drawer's `transition: transform .18s` is still
-  mid-flight. Measured `x: 0` at 200ms, `x: -88` at 800ms. **Poll until the value stops
-  changing**; a fixed sleep races it. Same for the account popover, which grows for ~600ms —
-  two equal reads are not proof it finished, require three.
+- **Never guess a selector.** Read the live page first. Do not use Google's generated class
+  names.
+- **Verify against a stock page.** Tear the script down first
+  (`window.__nixGooglePhotosTeardown?.()`). `[role="menubar"] > *:has(input)` reads empty while
+  the script is live, because the script already moved that node into the drawer.
+- **Poll, do not sleep.** The drawer's `transition: transform .18s` is mid-flight right after
+  load (measured `x: 0` at 200ms, `x: -88` at 800ms). The account popover grows for about
+  600ms; require three equal reads.
 - Photos' search is a **controlled** input: `value = ''` is reverted, select-all is swallowed,
-  and typed text lands at the **caret**. Assert the delta, then clear via the native value
-  setter plus an `input` event.
-- Re-injection is exactly the two-copy livelock the teardown contract exists for, so it
-  doubles as the livelock test.
+  and typed text lands at the caret. Assert the delta, then clear via the native value setter
+  plus an `input` event.
 
 ## Consumers and the install reality
 
@@ -292,12 +258,11 @@ failures**:
 
 ## Adding a script
 
-1. Measure the live page first (`page-lab:userscript` / `userscript-author` skill, or
-   `/page-lab:pick` to have the operator point at an element and get a dated, verified
-   selector back) — never guess a selector. See "Measuring the live page" above.
+1. Measure the live page first with Claude in Chrome (or the `userscript-lab` plugin's
+   `userscript-author` skill) — never guess a selector. See "Verifying a change" above.
 2. New `<name>.user.js` at the repo root; `@homepageURL`/`@supportURL` point at the
    `kattakath/nix-config` repo/issues.
 3. Add a row to the README table.
-4. Lint, then write `<name>.acceptance.mjs` and **exercise the host's primary actions with
-   trusted events** — lint and geometry both passed on the build that shipped a dead search.
+4. Lint, then install and **exercise the host's primary actions with trusted events** through
+   Claude in Chrome — lint and geometry both passed on the build that shipped a dead search.
 5. Declare it by name in `nix-config`'s `userScripts.scripts`.

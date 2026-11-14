@@ -1,7 +1,6 @@
 # Development, gate and release toolkit for this repository.
 #
 #   nix develop              → shell with node, the pinned ESLint stack, gh, jq, shellcheck
-#   nix develop .#verify     → the above plus page-lab's live-page runners and a browser launcher
 #   nix flake check          → every gate CI enforces, run hermetically
 #   nix run .#toolkit        → list every command
 #
@@ -9,9 +8,8 @@
 # Nothing here compiles a userscript and nothing ever will — a manager copies the
 # .user.js into extension storage verbatim, and a build step would change what a
 # reviewer reads relative to what a user executes. What this flake pins is the
-# MAINTENANCE side: the linters that decide whether a script is publishable, the
-# Node that runs them, and the live-page runners the doctrine says to measure with.
-# Three things were demonstrably drifting before it existed:
+# MAINTENANCE side: the linters that decide whether a script is publishable and the
+# Node that runs them. Two things were demonstrably drifting before it existed:
 #
 #   1. `npm ci` resolved ESLint from the registry at whatever moment CI ran, while
 #      the local shell had no `eslint` on PATH at all (measured 2026-09-28:
@@ -21,14 +19,6 @@
 #      is REMOVED from nixpkgs — evaluating `nodejs_20` now throws. The gate was
 #      running on an unsupported runtime. This flake pins Node 22 (Active LTS),
 #      which also satisfies eslint 10.10's own `^20.19 || ^22.13 || >=24`.
-#   3. Both CLAUDE.md files resolve page-lab with
-#      `ls -d ~/.claude/plugins/cache/*/page-lab/*/scripts | sort -V | tail -1`.
-#      The cache directories are git SHAs, not versions, so `sort -V` orders them
-#      alphabetically. Measured 2026-09-28: it selects `ef4781431d8c` (installed
-#      Sep 24 02:01) while the ACTIVE install recorded in installed_plugins.json is
-#      `bd750eaa7f39` (Sep 24 17:34). Every agent following that line measured the
-#      live page with a stale toolchain. Here page-lab is a pinned flake input, so
-#      the version is written in flake.lock and bumped on purpose.
 #
 # WHY ESLINT COMES FROM package-lock.json AND NOT FROM nixpkgs.
 # eslint.config.mjs imports `eslint-plugin-userscripts`, which validates the
@@ -49,22 +39,12 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
-    # The page-lab plugin's scripts directory: selector-verify, the acceptance
-    # runner, page-route and the CDP client the doctrine points at. Pinned as a
-    # SOURCE input (flake = false) rather than globbed out of the Claude plugin
-    # cache — see reason 3 in the header. `nix flake update page-lab` is the bump.
-    page-lab = {
-      url = "github:kattakath/skills";
-      flake = false;
-    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      page-lab,
     }:
     let
       inherit (nixpkgs) lib;
@@ -98,9 +78,7 @@
         ];
       };
       burnedTsv = lib.concatStringsSep "\n" (
-        lib.concatLists (
-          lib.mapAttrsToList (script: vers: map (v: "${script}\t${v}") vers) burnedVersions
-        )
+        lib.concatLists (lib.mapAttrsToList (script: vers: map (v: "${script}\t${v}") vers) burnedVersions)
       );
 
       # Source for the hermetic checks. `lib.cleanSourceWith` rather than a fileset
@@ -159,7 +137,6 @@
           };
 
           burnedFile = pkgs.writeText "burned-versions.tsv" burnedTsv;
-          pageLabScripts = "${page-lab}/plugins/page-lab/scripts";
 
           # Shared by every command. `export`, not plain assignment: each command
           # uses only part of this, and shellcheck flags an unexported unused name.
@@ -521,110 +498,6 @@
             '';
           };
 
-          # ── Live-page verification ──────────────────────────────────────────────
-
-          pagelab = mk {
-            name = "pagelab";
-            deps = [
-              nodejs
-              pkgs.curl
-              pkgs.jq
-            ];
-            text = ''
-              # Runs a page-lab script from the PINNED input. With no argument it
-              # lists what is available. This replaces the plugin-cache glob in
-              # CLAUDE.md, which selects a stale revision — see the header.
-              dir=${pageLabScripts}
-              if [ $# -eq 0 ]; then
-                echo "page-lab scripts (pinned: ${page-lab.shortRev or page-lab.rev or "dirty"})"
-                ls "$dir" | sed 's|^|  |'
-                echo
-                echo "usage: pagelab <script> [args...]   e.g. pagelab page-route.sh"
-                exit 0
-              fi
-              s="$1"; shift
-              [ -e "$dir/$s" ] || { echo "no such page-lab script: $s" >&2; exit 1; }
-              case "$s" in
-                *.sh)  exec bash "$dir/$s" "$@" ;;
-                *.mjs) exec node "$dir/$s" "$@" ;;
-                *)     exec "$dir/$s" "$@" ;;
-              esac
-            '';
-          };
-
-          browser = mk {
-            name = "browser";
-            deps = [ pkgs.curl ];
-            text = ''
-              # A throwaway Chromium for live-page measurement, OFF-SCREEN rather
-              # than headless. Headless introduces a second variable — codec and
-              # media differences, and headless fingerprinting on bot-gated sites —
-              # at exactly the moment the goal is a clean signal. Off-screen gets the
-              # same practical result (no visible window, no focus stealing) with
-              # full headed fidelity. Do not "simplify" this to --headless.
-              port="''${1:-9222}"
-              profile="''${CHROME_PROFILE_DIR:-''${TMPDIR:-/tmp}/userscripts-chromium-$port}"
-              mkdir -p "$profile"
-
-              bin=""
-              for candidate in \
-                "/Applications/Chromium.app/Contents/MacOS/Chromium" \
-                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-                "$(command -v chromium || true)" \
-                "$(command -v google-chrome || true)"; do
-                [ -n "$candidate" ] && [ -x "$candidate" ] && { bin="$candidate"; break; }
-              done
-              [ -n "$bin" ] || { echo "no Chromium or Chrome found" >&2; exit 1; }
-
-              if curl -sf "http://localhost:$port/json/version" >/dev/null 2>&1; then
-                echo "a DevTools endpoint is already up on :$port — reusing it"
-                exit 0
-              fi
-
-              "$bin" \
-                --remote-debugging-port="$port" \
-                --user-data-dir="$profile" \
-                --no-first-run --no-default-browser-check \
-                --no-usage-statistics \
-                --window-position=-3000,-3000 \
-                --window-size=1512,900 \
-                about:blank &
-              echo "chromium on :$port, profile $profile (off-screen, headed)"
-              echo "targets: curl -s localhost:$port/json/list | jq -r '.[] | \"\\(.id) \\(.url)\"'"
-            '';
-          };
-
-          verify = mk {
-            name = "verify";
-            deps = [
-              nodejs
-              pkgs.curl
-            ];
-            text = ''
-              # Runs a script's acceptance spec through page-lab's runner. The spec
-              # beside the script is DATA; page-lab owns the runner, which is what
-              # keeps "no test runner in this repository" true.
-              #
-              # Geometry proves a control is PRESENT, never that it WORKS: v3.0.0 of
-              # google-photos-icon-nav passed every geometry and hit-test check and
-              # shipped with search completely dead. The spec must exercise the
-              # host's primary actions under trusted events.
-              [ $# -ge 1 ] || {
-                echo "usage: verify <script> [--repeat N]" >&2
-                echo "specs available:" >&2
-                ls "$PRJ"/*.acceptance.mjs 2>/dev/null | sed 's|.*/|  |' >&2 || echo "  (none)" >&2
-                exit 1
-              }
-              name="''${1%.user.js}"; name="''${name%.acceptance.mjs}"; shift
-              spec="$PRJ/$name.acceptance.mjs"
-              [ -f "$spec" ] || { echo "no acceptance spec: $spec" >&2; exit 1; }
-              curl -sf http://localhost:9222/json/version >/dev/null 2>&1 \
-                || { echo "no DevTools endpoint on :9222 — run 'nix run .#browser' first" >&2; exit 1; }
-              cd "$PRJ"
-              exec node ${pageLabScripts}/userscript-acceptance.mjs "''${@:---repeat}" "''${2:-3}" "$spec"
-            '';
-          };
-
           toolkit = mk {
             name = "toolkit";
             text = ''
@@ -645,17 +518,11 @@
                   preflight [ref]                           the whole ship checklist
                   new-script <name> [match]                 scaffold a gate-passing script + listing
 
-                LIVE PAGE
-                  browser [port]   throwaway Chromium on :9222, off-screen (never headless)
-                  pagelab [script] run a PINNED page-lab script; no argument lists them
-                  verify <script>  run <script>.acceptance.mjs through page-lab's runner
-
                 MAINTENANCE
                   sync-deps        replace node_modules/ with the flake-pinned tree
                   toolkit          this list
 
                 nix develop          shell with all of the above on PATH
-                nix develop .#verify shell that also carries page-lab and a browser
                 nix flake check      every gate, hermetically
               EOF
             '';
@@ -704,25 +571,6 @@
               fi
               echo "userscripts — node $(node --version), eslint $("./node_modules/.bin/eslint" --version 2>/dev/null || echo '?')"
               echo "commands: nix run .#toolkit   (or just run them: gates, lint-fix, bump, preflight)"
-            '';
-          };
-
-          # A second shell rather than packages in the first: it carries a browser
-          # and the page-lab runners, which nothing in the lint path needs.
-          verify = pkgs.mkShell {
-            packages = [
-              nodejs
-              pkgs.git
-              pkgs.jq
-              pkgs.curl
-            ]
-            ++ cmds;
-            shellHook = ''
-              export PAGE_LAB_SCRIPTS="${page-lab}/plugins/page-lab/scripts"
-              echo "verify shell — PAGE_LAB_SCRIPTS pinned at ${page-lab.shortRev or "source"}"
-              echo "  browser        launch off-screen Chromium on :9222"
-              echo "  pagelab        list/run a pinned page-lab script"
-              echo "  verify <name>  run an acceptance spec"
             '';
           };
         }

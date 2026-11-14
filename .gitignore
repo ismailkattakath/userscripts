@@ -1,5 +1,5 @@
 # Dependencies — devDependencies only; there is no runtime dependency and no build.
-node_modules/
+node_modules
 
 # Lint / tool caches
 .eslintcache
