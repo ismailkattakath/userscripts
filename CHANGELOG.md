@@ -88,6 +88,68 @@ second injection left one chip; teardown left the row stock.
 
 ## github-pulls-running-checks
 
+### [2.6.0] - 2026-11-26
+
+#### Fixed
+
+- **The card was hard to move the pointer into.** GitHub closes a PR
+  hovercard ~100ms after the pointer leaves the title (measured 105-108ms), and
+  places the card at the title's midpoint, not at the pointer. From the left end
+  of a long title the card starts 100-150px away, past a 12px gap, so a normal
+  diagonal into it often arrived too late, even on stock GitHub. A transparent
+  safe-area region inside the card (the "menu aim" / Floating UI `safePolygon`
+  pattern) now covers the path from the pointer to the card. It never covers the
+  title, so clicking the title still opens the PR. It stands down once the
+  pointer is on the card, or after the pointer rests for 150ms, so a row it
+  covers can still be clicked.
+- **Two jobs with the same name in one workflow showed as one row.** Each now
+  gets its own row.
+- **The section pushed the card down over its own title.** GitHub positions the
+  card for its stock height; the section added 50-80px, and a card above the
+  title grew down onto the title's row. The card is now lifted by what the
+  section added. When there is no room above, it flips below the title.
+
+#### Added
+
+- **The open card refreshes itself.** While a card is open and anything is
+  running or queued, the checks are re-read every 5s and the rows are patched
+  in place, so the card can be watched. Refreshing stops when the card closes or
+  nothing is left running, pauses in a background tab, and backs off to 30s on
+  failure while keeping the last good rows (the header tooltip says so).
+- **GitHub's own status icons**, taken from the checks sidebar the script
+  already fetches: the spinning ring, check, x and skip octicons, in GitHub's
+  colours, instead of Unicode glyphs. The glyphs remain as a fallback.
+- **GitHub's own wording**: "2 in progress · 1 queued", "21 successful ·
+  5 skipped", and at rest "All checks have passed" or "Some checks were not
+  successful". The settled tally links to the PR's checks page.
+
+#### Changed
+
+- A running job whose start time cannot be read is asked about at most twice
+  while its card is open; the row keeps saying **running**.
+
+#### Verified live
+
+Headless Chrome for Testing 1248 (Playwright 1.64.1, both pinned through this
+repo's nixpkgs), signed out, script injected at document-start, on
+NixOS/nixpkgs/pulls:
+
+- Pointer glides of 300ms and 600ms from 10% into the title to the card's
+  centre, 10 per run: stock GitHub kept the card 3-6 times per run across six
+  runs. 2.6.0 kept it 10/10 in five of six runs, with cards above, below,
+  flipped and clamped over their title; the sixth, on a 520px-tall window under
+  load, kept it 6/8.
+- Trusted clicks: the title opened the PR, the tally opened `/checks`, a job row
+  opened its Actions job, and the title of the row above the open card's opened
+  its own PR (4/4; the first 2.6.0 build lost all four to the bridge).
+- Live refresh against a scripted response sequence (running, then a new job,
+  then HTTP 500, then all settled): 5.0s cadence, the same row and spinner nodes
+  kept across refreshes, the stale tooltip shown on 500 with a 10s back-off, and
+  0 requests once settled, on close, and in a hidden tab. Start-time lookups
+  answering 404 stopped at 6 for 3 jobs.
+- Teardown: the card's outerHTML matched a fresh stock card. A second injected
+  copy left one section and one request per hover.
+
 ### [2.5.1] - 2026-10-31
 
 #### Fixed

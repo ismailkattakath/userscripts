@@ -497,6 +497,22 @@
             '';
           };
 
+          # ── Headless browser harness ────────────────────────────────────────────
+          # Deliberately thin: Playwright and its Chrome for Testing are resolved by
+          # scripts/harness/run.sh on first use, so `nix flake check` (which builds
+          # every command here) does not pull a browser into CI's closure.
+          harness = mk {
+            name = "harness";
+            deps = [
+              nodejs
+              pkgs.git
+            ];
+            text = ''
+              cd "$PRJ"
+              exec scripts/harness/run.sh "$@"
+            '';
+          };
+
           toolkit = mk {
             name = "toolkit";
             text = ''
@@ -516,6 +532,9 @@
                   listing [script]                          assert every script has a listing, or print one
                   preflight [ref]                           the whole ship checklist
                   new-script <name> [match]                 scaffold a gate-passing script + listing
+
+                VERIFY
+                  harness <probe> [stock|script|both] [url]   headless CfT, script injected at document-start
 
                 MAINTENANCE
                   sync-deps        replace node_modules/ with the flake-pinned tree

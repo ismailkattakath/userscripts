@@ -54,8 +54,8 @@ Public Violentmonkey userscripts, **one `.user.js` per script at the repo root**
 no build, no package manager, no test runner — a userscript manager copies the file into
 extension storage **verbatim**, so whatever is committed is what runs.
 
-There is no runner or acceptance-spec file in this repo: verification is manual, on the real
-install (see "Verifying a change").
+Verification has two rails: a **headless harness** (`nix run .#harness`, `scripts/harness/`)
+for the fast loop, and the **real install** for the final proof (see "Verifying a change").
 
 Consumed as a **source-only flake input** (`flake = false`) by
 [`kattakath/nix-config`](https://github.com/kattakath/nix-config); this repo has no
@@ -78,7 +78,12 @@ Optional second opinion: inside the `userscript-lab` plugin, run
 for it: the cache directories are SHAs, so an alphabetical pick can be a stale install.
 
 Lint is not behaviour: lint and geometry both passed on the build that shipped a dead search.
-Verify on the real install (see "Verifying a change").
+Exercise behaviour in the harness, then prove it on the real install (see "Verifying a change").
+
+```bash
+nix run .#harness -- <probe> [stock|script|both] [url]   # one probe, A/B against stock
+scripts/harness/battery.sh                             # every probe for the GitHub script
+```
 
 CI equivalent lives **outside this repo**: `checks.<system>.userscripts` in
 `nix-config/modules/parts/checks.nix` runs the same linter against this repo's **pinned
@@ -222,8 +227,30 @@ future change wants the compact header back, it has to solve the dead search fir
 
 ## Verifying a change
 
-Claude in Chrome is the only browser rail; there is no CDP runner and no remote-debugging
-port. Measure and verify like this:
+### Fast loop: the headless harness
+
+`scripts/harness/` launches the Chrome for Testing build that the repo's pinned nixpkgs'
+Playwright expects, **headless only** (the runner refuses a browser without `--headless`), and
+injects the working-tree userscript at true `document-start` with a queued `GM_addStyle` shim.
+Probes are small ES modules under `probes/<script>/`, run `stock`, `script` or `both` for A/B.
+
+- **Never a windowed browser.** A headed browser takes the operator's focus on every page; one
+  did (2026-11-26) when another browser tool fell back to launching its own window. Check:
+  `ps -axo command | grep 'Google Chrome for Testing --' | grep -v grep | grep -vc -- --headless`
+  must print `0`.
+- **Logged out, on a public repo.** `NixOS/nixpkgs/pulls` serves hovercards and the
+  `/pull/N/checks` JSON route signed out, so no credential ever enters the harness.
+- **Real pointer paths.** `h.glide()` moves the mouse at ~60 samples a second, which is what
+  catches timing bugs (a card closing 100ms after the pointer leaves) that a teleporting
+  hover cannot.
+- **Fixtures for states CI won't produce on demand.** `page.route` serves scripted
+  `/checks` answers (running → new job → 500 → settled); see `probes/*/fixtures.mjs`.
+- Output (shots, `inject.js`) goes to `$XDG_STATE_HOME/userscripts-harness/`, never the repo.
+
+### Final proof: the real install
+
+Claude in Chrome acts in the operator's own Chrome window. Ask before using it, then measure
+and verify like this:
 
 1. Install the script in Violentmonkey. On Chrome 138+ this needs the one-time
    **Allow User Scripts** toggle, which is the operator's click.

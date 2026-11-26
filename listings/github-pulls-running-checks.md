@@ -40,19 +40,22 @@ Inside that section:
 
 - **failed jobs are named** — not "3 failing", the actual job names, so you know whether to care
 - **running jobs carry a live elapsed clock**, ticking, so a job stuck at 40 minutes is obvious at a glance
+- **the open card keeps itself current**: while anything is running it re-reads the checks every 5 seconds, so you can watch a run finish without re-hovering
+- **GitHub's own status icons and words**: the spinning ring, check, x and skip icons from GitHub's checks list, and "in progress", "successful", "All checks have passed"
 - rows are **grouped by workflow**, and the `push` / `pull_request` twins of the same job are merged into **one** entry instead of listed twice
-- everything settled is summarised on one line
+- everything settled is summarised on one line, which links to the full checks page
+- **easy to move into**: GitHub closes its card a tenth of a second after the pointer leaves the title, and on a long title the card sits well to the right. An invisible bridge keeps the card open while you move to it, so links inside it can be clicked
 
 ## What it does not do
 
 - **no token, no `api.github.com`, no `@connect`.** Same-origin, path-relative requests only — the same URL your browser would fetch, with your existing session
-- **no polling.** Requests happen on hover, are deduped while in flight, and are cached for 10 seconds; re-hovering the same pull request within that window fetches nothing. A job's start time, once found, is kept for good; a lookup that failed is retried on the next hover
+- **no background polling.** Requests happen on hover, are deduped while in flight, and are cached for 10 seconds. The only repeat request is the live refresh, and it runs only while a card is open **and** something in it is still running; it stops when the card closes, pauses in a background tab, and backs off on errors. A job's start time, once found, is kept for good
 - no storage, no settings panel, no `@require`
 - does not change the pull request page, the list, or any GitHub control
 
 ## Known limits
 
-- **At most five clocks per hover.** A wide matrix with more running jobs still lists every one; rows past the fifth say **running** where the clock would be, so no request storm and no blank cell.
+- **At most five clocks per open card.** A wide matrix with more running jobs still lists every one; rows past the fifth say **running** where the clock would be, so no request storm and no blank cell.
 - The elapsed clock reads the run id from an Actions job link, so **third-party checks** (Azure Pipelines and friends) show name, status and **running**, but no clock — they degrade cleanly, they do not break.
 - If GitHub changes the hovercard's markup the section simply stops appearing and the native card renders exactly as it always did. Verified by deliberately rotting the selector: stock card, zero requests.
 
