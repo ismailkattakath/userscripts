@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.0.2
+// @version      2.1.0
 // @description  Strips Civitai's image and video feeds to media plus one icon-only top bar, and keeps every other page usable: model, article and challenge cards stay stock and open their own page, a model page keeps Download and Details in a slim sidebar, and the header autohides. Image cards open a fullscreen viewer (arrows, Enter to open, i for the prompt). Surfaces are darkened; ads, footer and announcements go.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -65,7 +65,8 @@
 // location.pathname at entry and on every navigation:
 //   media    /images, /videos   media-only cards (rule 6), 8px grid (rule 12),
 //                               width fit (rule 14)
-//   models   /models, /3d-models   width fit only; cards stay stock
+//   models   /models, /3d-models   cards and geometry stay stock (no width fit
+//                               since 2026-11-26 — see fit())
 //   model    /models/<id>       rule 7, plus the slim sidebar
 //   post     /posts/<id>        each image fits the screen height
 //   other    everything else    theme, autohide and the chrome rules only
@@ -185,7 +186,12 @@
        home — a real absence, not a misfire. Its parent is "justify-between"
        with the nav-links group and a settings icon as the other two children,
        so hiding it just widens that gap; nothing needs to fill the space. */
-    html:not([data-nix-civitai-filters]) :is([class*="FeedFilters-module"], [class*="_filtersWrapper"]) {
+    /* Gated on our own toggle EXISTING (data-nix-civitai-filterbtn on <html>,
+       set by filtersButton()). Ungated, a route where the toggle could not be
+       built kept the site's sort and filters hidden with no way back — which is
+       what every signed-OUT visitor got until 2026-11-26, because the toggle was
+       anchored on a gear civitai renders only when signed in. */
+    html[data-nix-civitai-filterbtn]:not([data-nix-civitai-filters]) :is([class*="FeedFilters-module"], [class*="_filtersWrapper"]) {
       display: none !important;
     }
 
@@ -237,6 +243,13 @@
        stays pinned right without a rule of its own. */
     [data-nix-civitai-tagbar] {
       flex: 1 1 0%;
+    }
+    /* Signed out (measured 2026-11-26) the nav-links group is itself flex-1, so a
+       docked bar would split the row with it 50/50 and leave the icons' half
+       mostly empty. With a bar docked, the links take their content width and the
+       bar takes the rest. */
+    main > div.sticky.top-0.z-50 > div:has(> [data-nix-civitai-tagbar]) > div:has(a[href="/models"]) {
+      flex: 0 1 auto !important;
     }
 
     /* 5. Card cosmetic frame/glow — a creator-equipped decoration, present on
@@ -314,6 +327,14 @@
     html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) > * > [class*="mantine-Group-root"] {
       display: none !important;
     }
+    /* The event's party hat (2026-11-26): a button.__hat holding the hat's art,
+       a SIBLING of the card inside its cosmetic or event wrapper, overhanging the
+       card's corner by ~48px — outside the card root, so the allowlist above never
+       saw it. Everything in such a wrapper that is not the card goes, on the media
+       route only; elsewhere the event stays stock. */
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) :is([class*="_decorationOnly"], [class*="_cssFrame"]) > :not(div.relative.flex.overflow-hidden.rounded-md) {
+      display: none !important;
+    }
 
     /* 7. A model DETAIL page is media only too — the carousel, its arrows and
        the gallery masonry below survive; the article around them does not.
@@ -369,6 +390,18 @@
     html[data-nix-civitai-route="model"] [class*="mainRegion"] > [class*="rail"] {
       display: none !important;
     }
+    /* The rail's grid TRACK outlived it: mainRegion is "grid 1164px 300px",
+       so hiding the rail left a 332px blank band down the right of every model
+       page at 1512px (measured 2026-11-26). One track instead, and the content
+       column's 1320px cap lifted, so the carousel and sidebar take the width:
+       media column 797 -> 1008px, sidebar to the right edge, no overflow, no
+       error boundary. */
+    html[data-nix-civitai-route="model"] [class*="mainRegion"]:has(> [class*="rail"]) {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+    html[data-nix-civitai-route="model"] [class*="mainRegion"] > [class*="contentCol"] {
+      max-width: none !important;
+    }
     html[data-nix-civitai-route="model"] [class*="_titleWrapper"] > :not(h1),
     html[data-nix-civitai-route="model"] [class*="_titleWrapper"] ~ *,
     html[data-nix-civitai-route="model"] [class*="contentCol"] > a,
@@ -389,6 +422,14 @@
     #main div.sticky.top-0.z-50 > button {
       display: none !important;
     }
+    /* RE-MEASURED 2026-11-26: the promo is no longer a button. "Civitai turns 4 ·
+       Pick up a hat" is a 44px div holding a link to /events/birthday2026 (plus
+       its art and a close button), and it was showing on every route. Keyed on
+       the link's href prefix, so the next event's strip goes the same way, and
+       still the strip only — the category row is its sibling. */
+    #main div.sticky.top-0.z-50 > div:has(> a[href^="/events/"]) {
+      display: none !important;
+    }
 
     /* 9. The announcement carousel ("Sticker Book", "See what's in it", dots).
        "announcements" is a semantic class, not a Tailwind utility — the single
@@ -402,6 +443,15 @@
     main div:has(> div.announcements) {
       min-height: 0 !important;
       margin: 0 !important;
+    }
+    /* The home page's event hero ("Civitai turns 4 · Pick up a hat", 276px,
+       measured 2026-11-26) is a section of its own whose only content is a
+       CSS-module "_party" panel. The section goes — not just the panel, or its
+       64px of padding stays as a band. Only a section that carries NO feed
+       links: the same event's "Flag Race" section holds 11 real images and
+       stays, since that is content, not an announcement. */
+    main div:has(> div.\\@container > [class*="_queries"] > * > [class*="_party"]):not(:has(a[href^="/images/"], a[href^="/models/"], a[href^="/articles/"])) {
+      display: none !important;
     }
 
     /* 10. The bottom ad rail (SEMRUSH etc.) — a direct child of the app shell and a
@@ -477,11 +527,22 @@
       flex: 1 1 0 !important;
       width: auto !important;
     }
-    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] {
-      padding-top: 4px !important;
-      padding-bottom: 4px !important;
+    /* RE-MEASURED 2026-11-26: the wrapper is now "left:-36px; width:calc(100% +
+       72px); padding:36px; transform:translateY(-36px)" — room for the hat event's
+       overhanging decoration — and the 4px padding below, written for the old 8px
+       one, pulled every card 32px UP while the virtualiser kept its slot: the
+       first row sat 24px over the tag chips (zoomed), and every card ate into the
+       one above it. So the site's padding is no longer touched at all. Its slot
+       pitch is card + 16px whatever the padding is, so the card itself grows 8px
+       into its own bottom padding and the gutter becomes 8 — for a 36px padding,
+       an 8px one, or whatever the next build ships, as long as it is >= 8. */
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > :is(div.relative.flex.overflow-hidden.rounded-md, [class*="_decorationOnly"], [class*="_cssFrame"]) {
+      height: calc(100% + 8px) !important;
     }
-    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > div.relative.flex.overflow-hidden.rounded-md {
+    /* A card inside a cosmetic or event wrapper is that wrapper's child, so the
+       wrapper takes the 8px and the card has to follow it (measured: 14px gaps
+       under the 8 wrapped cards of 28 until it did). */
+    html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) .flex.flex-col > div[style*="position: absolute"] > :is([class*="_decorationOnly"], [class*="_cssFrame"]) > div.relative.flex.overflow-hidden.rounded-md {
       height: 100% !important;
     }
     html[data-nix-civitai-route="media"] #main div.\\@container[style*="padding-inline"] {
@@ -518,6 +579,9 @@
        It measures ~62px because the site positions rows while RESERVING each
        card's footer, which rule 6 hides — so ~46px of empty reserved space plus
        its own 16px falls between rows, and no element spans it to be shrunk.
+       CORRECTION 2026-11-26: the ~62px was never the footer. The virtualiser
+       measures rendered row heights, and rule 14's zoom inflated them (see
+       fit()); with /models unzoomed the gap is the site's own 16.
        Taking the layout over does fix it: give the spacer "height: auto" and
        return the bands to normal flow with a margin, and every gap and margin
        measures 8. It also BREAKS SCROLLING, measured 2026-09-07 — the
@@ -530,6 +594,13 @@
        recomputed in JS, not CSS. */
     html[data-nix-civitai-route="media"] :is([class*="MasonryContainer-module"], [class*="_queries"]) {
       width: 100% !important;
+      /* The card wrappers now reach 36px past each card on both sides (room for
+         the hat event's overhang; see rule 12). Stock hides that inside its 92px
+         side margins; at this file's 8px edge the last column's wrappers pushed
+         the page 25px wide, a sideways-scrollable page (measured 2026-11-26 on
+         /videos: 25px scripted, 0 stock). clip, not hidden: it makes no scroll
+         container, so neither the sticky sub-nav nor the virtualiser notices. */
+      overflow-x: clip !important;
     }
     /* A creator cosmetic wraps its card in 6px of padding that a plain card
        does not have, so a wrapped card rendered 308px beside a neighbour's 320
@@ -586,11 +657,14 @@
     }
     /* The i key's generation-data panel. Plain text only: everything in it
        is the poster's own data, written with textContent, never as markup. */
+    /* Sized to its content, capped at the window: a full-height panel left
+       ~80% of its glass empty for a typical prompt (measured 2026-11-26). */
     .nix-civitai-info {
       position: fixed;
       top: 16px;
       right: 16px;
-      bottom: 16px;
+      max-height: calc(100vh - 32px);
+      box-sizing: border-box;
       width: min(420px, 40vw);
       overflow-y: auto;
       z-index: 2147483647;
@@ -702,6 +776,10 @@
   // "Customize navigation", and "Customize page and navigation" on the home
   // page (measured 2026-10-31) — so a prefix, not an exact label.
   const CUSTOMIZE_NAV_BTN = 'main > div.sticky.top-0.z-50 button[aria-label^="Customize"]';
+  // A nav link that every session has, and the sticky sub-nav's row holding it
+  // (measured 2026-11-26, signed out: the row is [links group][sort+filters]).
+  const NAV_LINK = 'main > div.sticky.top-0.z-50 a[href="/models"]';
+  const SUBNAV_ROW = 'main > div.sticky.top-0.z-50 > div';
 
   const tag = (el) => {
     if (el.dataset.nixCivitaiAd === undefined) el.dataset.nixCivitaiAd = '';
@@ -795,29 +873,51 @@
   const FILTER_BTN = 'nix-civitai-filters-btn';
   const FILTER_ATTR = 'data-nix-civitai-filters';
   const FILTER_SVG = 'M4 5h16l-6 7v6l-4 2v-8z';
+  const FILTERBTN_ATTR = 'data-nix-civitai-filterbtn';
+  // The site's "this pill is the current page" classes on a nav link (measured
+  // 2026-11-26: the /images link carries exactly these two on /images). The
+  // toggle wears them while the filters are shown, so "on" looks like the
+  // site's own selected pill rather than a colour of ours.
+  const PILL_ON = ['bg-gray-4', 'dark:bg-dark-4'];
   const filtersButton = (gear, row) => {
     const has = !!document.querySelector('[class*="_filtersWrapper"], [class*="FeedFilters-module"]');
     let btn = document.querySelector('.' + FILTER_BTN);
-    if (!has || !row || !gear) {
+    // The template the toggle copies its look from: the gear when the session
+    // has one (signed in), else a nav link that is NOT the current page — the
+    // row's own icon pill, so the toggle is one more of them.
+    const template = gear || (row && [...row.querySelectorAll('a[href][data-civitai-ui]')].find((a) => !PILL_ON.some((c) => a.classList.contains(c))));
+    if (!has || !row || !template) {
       if (btn) btn.remove();
       root.removeAttribute(FILTER_ATTR);
+      root.removeAttribute(FILTERBTN_ATTR);
       return;
     }
-    if (btn && btn.parentElement === row) return;
+    if (btn && btn.parentElement === row) {
+      root.setAttribute(FILTERBTN_ATTR, '');
+      return;
+    }
     if (btn) btn.remove();
     btn = document.createElement('button');
     btn.type = 'button';
-    // The gear's own classes, inline style and data-* attributes, read at
+    // The template's own classes, inline style and data-* attributes, read at
     // runtime, so the button matches whatever the site's icon buttons look
     // like this build. Mantine sizes them through the inline --ai-size and
     // --ai-radius and colours them by data-variant: copying the classes alone
     // gave a 28px square beside the 32px round gear (measured 2026-10-31).
-    btn.className = gear.className + ' ' + FILTER_BTN;
-    if (gear.hasAttribute('style')) btn.setAttribute('style', gear.getAttribute('style'));
-    for (const a of gear.attributes) if (a.name.startsWith('data-')) btn.setAttribute(a.name, a.value);
+    btn.className = template.className + ' ' + FILTER_BTN;
+    for (const c of PILL_ON) btn.classList.remove(c);
+    // A nav link's padding is sized for a label rule 3 hides; same 12px as rule 3.
+    if (!gear) btn.style.cssText = 'padding-left:12px;padding-right:12px';
+    else if (gear.hasAttribute('style')) btn.setAttribute('style', gear.getAttribute('style'));
+    for (const a of template.attributes) if (a.name.startsWith('data-')) btn.setAttribute(a.name, a.value);
     btn.setAttribute('aria-label', 'Sort and filters');
     btn.setAttribute('title', 'Sort and filters');
-    btn.setAttribute('aria-pressed', root.hasAttribute(FILTER_ATTR) ? 'true' : 'false');
+    const paint = () => {
+      const on = root.hasAttribute(FILTER_ATTR);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (!gear) for (const c of PILL_ON) btn.classList.toggle(c, on);
+    };
+    paint();
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -827,17 +927,24 @@
     svg.setAttribute('stroke', 'currentColor');
     svg.setAttribute('stroke-width', '2');
     svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS(ns, 'path');
     path.setAttribute('d', FILTER_SVG);
     svg.appendChild(path);
     btn.appendChild(svg);
     btn.addEventListener('click', () => {
-      const on = !root.hasAttribute(FILTER_ATTR);
-      if (on) root.setAttribute(FILTER_ATTR, '');
-      else root.removeAttribute(FILTER_ATTR);
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (root.hasAttribute(FILTER_ATTR)) root.removeAttribute(FILTER_ATTR);
+      else root.setAttribute(FILTER_ATTR, '');
+      paint();
     }, { signal: ac.signal });
-    row.insertBefore(btn, gear);
+    // AFTER the site's sort+filters group, so the group opens to the toggle's
+    // LEFT and the toggle stays under the pointer. Placed before it, the 257px
+    // group pushed the toggle left as it opened, and a second click at the same
+    // spot landed on the site's own "Filters" and opened its popover (measured
+    // 2026-11-26, trusted clicks, signed out). Signed in, that is just before
+    // the gear, which ends the row; signed out, the row's end.
+    row.insertBefore(btn, gear || null);
+    root.setAttribute(FILTERBTN_ATTR, '');
   };
 
   const sweep = () => {
@@ -914,8 +1021,16 @@
     // detail→images→models→videos walk (dockedBars: 1 at every step).
     // Rule 4 above does the flex-sizing; the reparent is JS because no CSS
     // mechanism moves a node between containers.
+    // The sub-nav row is found by its nav links, not by the gear: the gear
+    // ("Customize navigation") exists only for a signed-in session, so keying
+    // on it left a signed-out visitor with no docking and no filters toggle
+    // (measured 2026-11-26). The gear, when present, is still where things go.
     const gear = document.querySelector(CUSTOMIZE_NAV_BTN);
-    const row = gear && gear.parentElement;
+    const links = document.querySelector(NAV_LINK);
+    const row = gear ? gear.parentElement : links && links.closest(SUBNAV_ROW);
+    const linksGroup = row && links ? [...row.children].find((c) => c.contains(links)) : null;
+    // Insert point: before the gear, else straight after the links group.
+    const slot = gear || (linksGroup && linksGroup.nextSibling) || null;
     if (row) {
       let bar = null;
       for (const sel of BARS) {
@@ -934,7 +1049,7 @@
         }
         barHome = notedHome(bar);
         bar.dataset.nixCivitaiTagbar = '';
-        row.insertBefore(bar, gear);
+        if (slot !== bar) row.insertBefore(bar, slot);
       }
     }
     if (routeNow === 'model') slimModel();
@@ -989,7 +1104,15 @@
     // Detail pages carry masonries too (a model's gallery and Suggested
     // Resources), and so do search, collections and storylines — where a zoom
     // shrank the page or overlapped the cards. Only the two feed families fit.
-    if (routeNow !== 'media' && routeNow !== 'models') return setZoom(0);
+    // /models is NOT fitted any more (2026-11-26). Its virtualiser MEASURES each
+    // row's rendered height and reuses it as a local translate, so under a zoom
+    // of z it lays rows out at h*z + 16 while they draw h tall: measured at
+    // z 1.111, row pitch 473 vs stock 427, a 61px gap between rows against
+    // stock's 16. No CSS can undo that — any ancestor zoom or scale inflates the
+    // measurement — so /models keeps the site's own geometry. The image and
+    // video feeds compute their heights instead of measuring them, which is why
+    // they fit cleanly (8px everywhere, measured the same day).
+    if (routeNow !== 'media') return setZoom(0);
     const feed = document.querySelector(FEED);
     const host = feed && feed.closest(HOST);
     const box = feed && feed.parentElement;
@@ -1143,17 +1266,53 @@
   // observing detached slides until it is collected, and a torn-down copy must
   // leave nothing that can still call play() on a node the page no longer owns.
   let viewIo = null;
+  // The viewer is a MODAL, and was not one until 2026-11-26: measured then,
+  // Tab from inside it moved focus to a feed link under the overlay, and a
+  // screen reader saw a bare div. So it is a labelled dialog that takes focus,
+  // and the app behind it is inert while it is open. `inert` is the one
+  // attribute this file sets on a node of the site's (#__next), recorded and
+  // restored exactly — a #__next that was already inert stays so.
+  const APP = '#__next';
+  let inertHome = null;
+  let opener = null;
+  const setInert = (on) => {
+    const app = document.querySelector(APP);
+    if (on) {
+      if (!app || inertHome) return;
+      inertHome = { app, was: app.inert };
+      app.inert = true;
+    } else if (inertHome) {
+      inertHome.app.inert = inertHome.was;
+      inertHome = null;
+    }
+  };
 
   const closeView = () => {
+    // Stop any sharp-video download still in flight; nothing will show it.
+    for (const pre of preloads) { pre.removeAttribute('src'); pre.load(); }
+    preloads.clear();
+    // Focus goes back to the card the reader LAST looked at, not the one they
+    // opened: after paging through twenty slides, that is where they are.
+    // preventScroll is off on purpose — the grid scrolls to show it.
+    const last = viewCur && viewCur.dataset.href;
+    setInert(false);
     if (viewIo) viewIo.disconnect();
     viewIo = null;
     if (moreTimer) clearTimeout(moreTimer);
     moreTimer = 0;
+    const feed = viewFeed;
     if (viewEl) viewEl.remove();
     viewEl = null;
     viewFeed = null;
     viewCur = null;
     infoEl = null;
+    if (torn) return;
+    const back = (last && feed && [...feed.querySelectorAll('a[href]')].find((a) => a.getAttribute('href') === last)) || opener;
+    opener = null;
+    if (back && back.isConnected && typeof back.focus === 'function') {
+      back.focus();
+      if (back.scrollIntoView) back.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }
   };
 
   const slideFor = (card) => {
@@ -1185,6 +1344,11 @@
   // native 1080 (0.76 MB to 1.47 MB). The swap happens after the bigger file
   // has loaded, so the slide never goes blank.
   const SHARP = 'width=1920';
+  // Live preloaders, held so they are not collected mid-load: a detached media
+  // element nothing references can be garbage-collected before its canplay —
+  // measured 2026-11-26, the swap never landed in 9s while the same preloader
+  // held by a reference reached canplay in 785ms. closeView() drops them.
+  const preloads = new Set();
   const sharpen = (slide) => {
     const node = slide.querySelector('.nix-civitai-view-media');
     if (!node || slide.dataset.sharp) return;
@@ -1193,11 +1357,28 @@
     if (parts.length < 2 || !/width=\d+/.test(parts[parts.length - 2])) return;
     parts[parts.length - 2] = parts[parts.length - 2].replace(/width=\d+/, SHARP);
     const url = parts.join('/');
+    // A video swaps only once the sharp file can PLAY, exactly like an image —
+    // until 2026-11-26 it swapped at once, and the slide sat black while the
+    // 1920 transcode loaded: time to first frame 6.8s and >8s on two uncached
+    // videos, against ~120ms for the feed's own cached 450 rendition. The feed
+    // rendition plays in the meantime; the swap keeps its position.
     if (node.tagName === 'VIDEO') {
-      const t = node.currentTime;
-      node.src = url;
-      node.currentTime = t;
-      if (slide === viewCur) node.play().catch(() => {});
+      const pre = document.createElement('video');
+      pre.muted = true;
+      pre.preload = 'auto';
+      preloads.add(pre);
+      pre.addEventListener('canplay', () => {
+        preloads.delete(pre);
+        pre.removeAttribute('src');
+        pre.load();
+        if (torn || !node.isConnected) return;
+        const t = node.currentTime;
+        const go = !node.paused || slide === viewCur;
+        node.src = url;
+        node.currentTime = t;
+        if (go) node.play().catch(() => {});
+      }, { once: true, signal: ac.signal });
+      pre.src = url;
       return;
     }
     const pre = document.createElement('img');
@@ -1287,9 +1468,19 @@
 
   const toggleInfo = () => {
     if (!viewEl) return;
-    if (infoEl) { infoEl.remove(); infoEl = null; return; }
+    if (infoEl) {
+      infoEl.remove();
+      infoEl = null;
+      // Focus inside the removed panel would drop to <body> while the dialog is
+      // still open (measured 2026-11-26); it belongs to the dialog.
+      if (!viewEl.contains(document.activeElement)) viewEl.focus({ preventScroll: true });
+      return;
+    }
     infoEl = document.createElement('div');
     infoEl.className = 'nix-civitai-info';
+    infoEl.setAttribute('role', 'region');
+    infoEl.setAttribute('aria-label', 'Generation data');
+    infoEl.setAttribute('aria-live', 'polite');
     viewEl.appendChild(infoEl);
     fillInfo();
   };
@@ -1298,8 +1489,13 @@
     viewFeed = card.closest(FEED);
     const cards = viewerCards(viewFeed);
     const start = Math.max(0, cards.indexOf(card));
+    opener = document.activeElement !== document.body ? document.activeElement : cardLink(card);
     viewEl = document.createElement('div');
     viewEl.className = 'nix-civitai-view';
+    viewEl.setAttribute('role', 'dialog');
+    viewEl.setAttribute('aria-modal', 'true');
+    viewEl.setAttribute('aria-label', 'Image viewer. Arrow keys move, Enter opens the page, i shows generation data, Escape closes.');
+    viewEl.tabIndex = -1;
     for (const c of cards) viewEl.appendChild(slideFor(c));
     // Clicking the matte closes; clicking the media itself does not, so a
     // video's own controls stay usable.
@@ -1307,6 +1503,8 @@
       if (e.target === viewEl || e.target.classList.contains('nix-civitai-slide')) closeView();
     });
     document.body.appendChild(viewEl);
+    setInert(true);
+    viewEl.focus({ preventScroll: true });
     // Jump to the clicked one BEFORE snapping is observed, so opening does not
     // animate a scroll through everything above it.
     const target = viewEl.children[start];
@@ -1431,7 +1629,9 @@
     }, { capture: true });
     on(document, 'keydown', (e) => {
       if (!viewEl) return;
-      if (e.key === 'Escape') { e.preventDefault(); closeView(); return; }
+      // Escape closes the topmost layer: the info panel if it is open, then
+      // the viewer. One Escape used to close both at once.
+      if (e.key === 'Escape') { e.preventDefault(); if (infoEl) toggleInfo(); else closeView(); return; }
       if (e.key === 'Enter') { e.preventDefault(); openCurrent(e.metaKey || e.ctrlKey); return; }
       if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); toggleInfo(); return; }
       const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1
@@ -1500,6 +1700,7 @@
     root.style.removeProperty(HDR_VAR);
     root.removeAttribute(ROUTE_ATTR);
     root.removeAttribute(FILTER_ATTR);
+    root.removeAttribute(FILTERBTN_ATTR);
     for (const el of document.querySelectorAll('.' + FILTER_BTN)) el.remove();
     for (const el of document.querySelectorAll('[' + OFF + ']')) el.removeAttribute(OFF);
 

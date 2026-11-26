@@ -25,6 +25,52 @@ Entries are grouped by script. Within a release, use the
 
 ## civitai-declutter
 
+### [2.1.0] - 2026-11-26
+
+Measured on the live site (civitai.com, signed out, 1512px), each fix A/B against
+stock with the script torn down, every primary action under trusted clicks.
+
+#### Fixed
+
+- **Sort and filters were unreachable when signed out.** The toggle was anchored
+  on a "Customize navigation" gear that Civitai renders only for a signed-in
+  session, so it was never built, while the site's own sort and filters stayed
+  hidden. The toggle now anchors on the nav links and copies an icon pill's look
+  (it wears the site's "current page" classes while open). The site's group is
+  hidden only once the toggle exists, and the toggle sits after it, so opening
+  the filters does not move the toggle out from under the pointer.
+- **The tag bar was not docked into the top bar** when signed out, for the same
+  reason; it is again.
+- **Cards overlapped the tag chips and each other.** Civitai's card wrapper is
+  now `padding: 36px; transform: translateY(-36px)`, and the old 4px padding
+  override lifted every card 32px. The site's padding is no longer touched; the
+  card grows 8px into it instead, so every gap is 8px (28 of 28 measured) for
+  any padding of 8px or more.
+- **The page scrolled sideways by 25px** on the feeds: the same 36px wrapper
+  overhang stuck out past the 8px edge. The masonry clips horizontally.
+- **The event strip ("Civitai turns 4 · Pick up a hat") showed on every route**:
+  it became a link, not a button. Hidden by its `/events/` link, so later events
+  go too. The home page's event hero section is hidden; the event's Flag Race
+  section, which holds real images, stays.
+- **Party hats over feed cards**: the event's hat sits outside the card. Hidden
+  on the image and video feeds; elsewhere the event stays stock.
+- **/models had 61px between rows** (stock: 16). Its virtualiser measures
+  rendered row heights, which the width-fit zoom inflated. /models is no longer
+  zoomed; the old note blaming a reserved footer was wrong and is corrected.
+- **Model pages had a 332px blank band on the right**: the hidden ad rail's grid
+  track stayed. One track now, and the media column grows from 797 to 1008px.
+- **Viewer: a video slide was black for 7s or more** while the 1920 file loaded.
+  The feed's cached rendition plays at once (first frame ~125ms) and the sharp
+  file swaps in, at the same position, once it can play.
+
+#### Changed
+
+- **The viewer is a modal dialog**: `role="dialog"`, `aria-modal`, a label naming
+  its keys, focus moves into it and the app behind is `inert`, so Tab no longer
+  walks the hidden feed. Escape closes the info panel first, then the viewer.
+  Focus returns to the card last viewed, scrolled into view.
+- The info panel (`i`) is sized to its content instead of the full height.
+
 ### [2.0.2] - 2026-10-31
 
 #### Removed

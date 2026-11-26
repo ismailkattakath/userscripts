@@ -41,15 +41,17 @@ On a page it takes:
 ```
 
 - **feed cards show only the image or the video** — no title, no stats, no reaction bar, no overlay chrome
-- the **header, footer, chat, ads, announcements and comments** go
+- the **header, footer, chat, ads, announcements, event banners and comments** go — the header autohides rather than vanishing, so Sign In and search stay one scroll away
 - whatever scrollable bar the route owns — the feed's tag chips, or a model's version picker — **docks into the top bar** instead of eating a row of its own
 - a **model page keeps its carousel and its gallery**; that is the content
-- gaps and page edges are a uniform 8px, surfaces are darkened, and the masonry fills the window's width
+- on the image and video feeds, gaps and page edges are a uniform 8px and the masonry fills the window's width; surfaces are darkened everywhere
+- **sort and filters** sit behind one icon at the end of the top bar, signed in or out
+- image cards open a **fullscreen viewer**: arrow keys to move, Enter for the item's page, `i` for the prompt and resources, Escape to close; it is a proper dialog, so keyboard and screen-reader focus stay in it and come back to the last card you viewed
 
 ## What it does not do
 
 - no downloading, no scraping, no auto-clicking, no Buzz farming
-- no network calls, no storage, no settings panel, no `@require`
+- no third-party requests, no storage, no settings panel, no `@require`
 - does not bypass any gate, unlock anything, or change what the site would show you
 - `@grant GM_addStyle` only — used because the stylesheet has to queue before `document.head` exists
 
@@ -64,7 +66,7 @@ The Civitai shelf is mostly downloaders, metadata exporters and auto-clickers. T
 
 ## Privacy
 
-Zero requests of its own, zero storage. Read the source — one file, no build, no minification.
+No third-party host is contacted and nothing is stored. The only requests it makes are to Civitai itself, from the viewer: a sharper rendition of the item on screen, and its generation data when you press `i`. Read the source — one file, no build, no minification.
 
 ## Source
 

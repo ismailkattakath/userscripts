@@ -20,7 +20,12 @@ read -r PW BR < <(nix build --no-link --print-out-paths --inputs-from "$REPO" ni
   cat <<'SHIM'
 window.GM_addStyle = (css) => { const s = document.createElement('style'); s.textContent = css; const put = () => { const r = document.head || document.documentElement; if (r) { r.appendChild(s); return true; } return false; }; if (!put()) { const mo = new MutationObserver(() => { if (put()) mo.disconnect(); }); mo.observe(document, { childList: true, subtree: true }); } return s; };
 SHIM
+  # Violentmonkey's document-start runs once <html> exists; addInitScript runs
+  # before it, where document.documentElement is null (civitai's script threw 12x
+  # on that, 2026-11-26). So the body waits for the root, as the manager would.
+  echo '(function nixRun() { if (!document.documentElement) { new MutationObserver((m, o) => { if (document.documentElement) { o.disconnect(); nixRun(); } }).observe(document, { childList: true }); return; }'
   cat "$REPO/$SCRIPT"
+  echo '})();'
 } > "$STATE/inject.js"
 node --check "$STATE/inject.js"
 NODE_PATH="$PW/lib/node_modules" PLAYWRIGHT_BROWSERS_PATH="$BR" HARNESS_STATE="$STATE" \
