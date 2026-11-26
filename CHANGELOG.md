@@ -25,6 +25,21 @@ Entries are grouped by script. Within a release, use the
 
 ## civitai-declutter
 
+### [2.1.1] - 2026-11-26
+
+#### Fixed
+
+- **Images disappeared and reappeared while scrolling the feeds** (operator
+  report: dragging the scrollbar up and down). The width-fit zoom on `main`
+  desynchronised Civitai's virtualiser, which decides what to mount in its own
+  unzoomed px: a 50-jump scroll unmounted 21 cards while they were on screen at
+  zoom 0.8994, and 0 with the zoom forced to 1, everything else unchanged. The
+  zoom is removed. It also turned out not to be what fills the width — rule 12's
+  flexing columns already do, unzoomed: 4 columns of 368px with 8px edges at
+  1512px, 41 of 43 gaps at 8px, media cropped 0-1% on six of seven cards (9% on
+  one). The fit code, its constants and its teardown line are deleted, and the
+  approach is recorded as rejected in the file.
+
 ### [2.1.0] - 2026-11-26
 
 Measured on the live site (civitai.com, signed out, 1512px), each fix A/B against

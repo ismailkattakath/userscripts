@@ -3,7 +3,7 @@
 // @namespace    kattakath.com
 // @author       Ismail Kattakath
 // @license      MIT
-// @version      2.1.0
+// @version      2.1.1
 // @description  Strips Civitai's image and video feeds to media plus one icon-only top bar, and keeps every other page usable: model, article and challenge cards stay stock and open their own page, a model page keeps Download and Details in a slim sidebar, and the header autohides. Image cards open a fullscreen viewer (arrows, Enter to open, i for the prompt). Surfaces are darkened; ads, footer and announcements go.
 // @homepageURL  https://github.com/ismailkattakath/userscripts
 // @supportURL   https://github.com/ismailkattakath/userscripts/issues
@@ -40,18 +40,18 @@
 // node, where an allowlist would have to enumerate the whole page to say what
 // stays.
 //
-// HORIZONTAL (rule 14 + fit() below). Measured 2026-09-06 on civitai.com/images
+// HORIZONTAL (rule 12; rule 14 was removed in 2.1.1). Measured 2026-09-06 on civitai.com/images
 // at 1452px and 1920px: the masonry never fills the window. The site's own
 // MasonryProvider (chunk 26viv-cf_1s0t.js, read the same day) computes
 //   columns = min(floor((w + 16) / (320 + 16)), 7)
 // from a ResizeObserver on its own padded box and centres a block of
 // 320·k + 16·(k−1) px — a 92px dead gutter at 1452, 224px at 1920, up to one
-// column minus a gap at any width. Column and card heights are inline px
-// computed for that 320px column, so stretching columns in CSS crops every
-// image (object-fit: cover). No condition makes the site render a filled feed,
-// so this is constructed, with ONE property: a CSS zoom on `main`, sized so the
-// site's own math lands on k columns whose block fills the width exactly. The
-// site keeps doing the layout; no inline value is fought.
+// column minus a gap at any width. Up to 2.1.0 this was filled with a CSS zoom
+// on `main`; that zoom desynchronised Civitai's virtualisers and was removed in
+// 2.1.1 (see "Rejected: the width-fit zoom" in the code). The width is filled by
+// rule 12's flexing columns instead: the card heights are inline px, but the
+// cards follow each image's aspect closely enough that stretching 320 -> 368px
+// crops the media 0-1% (9% on one card of seven, measured 2026-11-26).
 //
 // ROUTE PROFILES (2.0.0). A UX study of every category on 2026-10-31 found
 // one masonry component (the "_queries" element) under /models, /3d-models,
@@ -66,7 +66,7 @@
 //   media    /images, /videos   media-only cards (rule 6), 8px grid (rule 12),
 //                               width fit (rule 14)
 //   models   /models, /3d-models   cards and geometry stay stock (no width fit
-//                               since 2026-11-26 — see fit())
+//                               since 2026-11-26 — see the rejected zoom)
 //   model    /models/<id>       rule 7, plus the slim sidebar
 //   post     /posts/<id>        each image fits the screen height
 //   other    everything else    theme, autohide and the chrome rules only
@@ -94,8 +94,7 @@
 //   img[alt="Support Civitai creators"]   the adblock placeholder, linking
 //                                  /pricing; its old alt no longer appears
 // "_queries" is the weakest of these: a generic name. It is unique on all three
-// feeds today, and fit() still refuses any match whose inline width is not
-// 320·k + 16·(k−1), so a stray match degrades to stock instead of a wrong zoom.
+// feeds today, and every rule keyed on it is scoped to the media route.
 //
 // LIFECYCLE — one teardown, called at entry. Added 2026-09-14; this file had
 // none, alone in this family. A second copy is reachable in the wild (a Greasy
@@ -554,7 +553,7 @@
        same kind of inline grid under the same masonry, and it turned search's
        grid into 982 columns of 0px (0 of 982 results visible) and crucibles
        into one row of 140px tiles (measured 2026-10-31). /models cards are
-       stock again in 2.0.0, so the stock 16px gutter and fit()'s zoom already
+       stock again in 2.0.0, so the stock 16px gutter and (then) rule 14's zoom
        fill the width. The original note follows for the record.
 
        /models does not lay its feed out like rule 12's. It ships a spacer
@@ -581,7 +580,7 @@
        its own 16px falls between rows, and no element spans it to be shrunk.
        CORRECTION 2026-11-26: the ~62px was never the footer. The virtualiser
        measures rendered row heights, and rule 14's zoom inflated them (see
-       fit()); with /models unzoomed the gap is the site's own 16.
+       "Rejected: the width-fit zoom"); unzoomed, the gap is the site's own 16.
        Taking the layout over does fix it: give the spacer "height: auto" and
        return the bands to normal flow with a margin, and every gap and margin
        measures 8. It also BREAKS SCROLLING, measured 2026-09-07 — the
@@ -715,15 +714,8 @@
     .bg-dark-8, [data-mantine-color-scheme="dark"] .dark\\:bg-dark-8 { background-color: #0A0B0C !important; }
     .bg-dark-9, [data-mantine-color-scheme="dark"] .dark\\:bg-dark-9 { background-color: #08090A !important; }
 
-    /* 14. Feed width. \`main\` (measured 2026-09-06: one per page, class "min-w-0
-       flex-1") hosts the zoom because BOTH masonry providers measure boxes inside
-       it — FeedLayout's (class "z-10 m-0 flex-1", chunk 1t51nljfgomzh.js) and
-       MasonryContainer's padded "@container" box — and the outer one caps the
-       inner one, so a zoom above both moves both. The value is computed by fit()
-       and lands on a custom property so this sheet stays static; unset = stock. */
-    main {
-      zoom: var(--nix-civitai-zoom, 1);
-    }
+    /* 14. REMOVED in 2.1.1 — the width-fit zoom on \`main\`. See "Rejected: the
+       width-fit zoom" in the code, beside the masonry's FEED selector. */
   `;
 
   // Violentmonkey and Tampermonkey both RETURN the <style> they append, and that
@@ -761,7 +753,7 @@
   // bar from one a previous route's sweep already parked in the sub-nav:
   //   · a feed (/images, /models, /videos) renders the tag bar and NO version bar
   //   · a model detail page renders the version bar and NO tag bar (0 matches)
-  // The tag bar's grandparent IS the FEED element fit() already tracks.
+  // The tag bar's grandparent IS the FEED element (the masonry).
   // ".min-w-0.min-h-[26px]" is plain Tailwind, but was verified page-wide UNIQUE
   // on all three feeds — scoped to FEED anyway so a future coincidence elsewhere
   // on the page can't false-match it. VERSIONBAR is the model's version picker
@@ -1054,7 +1046,6 @@
     }
     if (routeNow === 'model') slimModel();
     filtersButton(gear, row);
-    fit();
   };
 
   // ── Feed width ────────────────────────────────────────────────────────────
@@ -1066,89 +1057,27 @@
   //   box   FEED's parentElement — the provider's padded box (padding 16/16),
   //         the element its ResizeObserver reads.
   //   COL / SITE_GAP / MAX_COLS  MasonryProvider defaults; cardSizes.image is 320.
-  const FEED = ':is([class*="MasonryContainer-module"], [class*="_queries"])';
-  const HOST = 'main';
-  const COL = 320;
-  // The site's own gap, and the ONLY one this math may use. Rule 12 renders an
-  // 8px gutter, but Civitai still reserves 336px per column whatever CSS does —
-  // it sizes the feed and picks the column count from that number alone. Sizing
-  // the box to the tighter 328 therefore asks for a column count it will never
-  // choose: measured 2026-09-07 on /models, the box came out 1633px wide, the
-  // site still rendered 4 columns into a 1328px feed, and the 305px left over
-  // became a 172px margin down each side. So the zoom targets the site's
-  // geometry and the narrower gutter is spent as a little extra edge instead.
-  const SITE_GAP = 16;
-  const SITE_PITCH = COL + SITE_GAP;
-  const MAX_COLS = 7;
-  // Two column counts fill any width: the site's own k (zoom > 1, bigger cards)
-  // and k + 1 (zoom < 1, one more column). 'nearest' takes whichever scale is
-  // closer to 1 — the least visible change; 'more' / 'fewer' force a side.
-  const DENSITY = 'nearest';
-  // Outside this band the fit would read as a wrong browser zoom: above 1.5 the
-  // 450px sources start to look soft, below 0.75 the card text stops being text.
-  const ZOOM_MIN = 0.75;
-  const ZOOM_MAX = 1.5;
-  const ZOOM_VAR = '--nix-civitai-zoom';
   const root = document.documentElement;
 
-  // Write-guarded: the site's ResizeObserver reacts to every zoom change, and
-  // a rewrite of the same value would still be a change to it.
-  const setZoom = (z) => {
-    const next = z ? z.toFixed(4) : '';
-    if (root.style.getPropertyValue(ZOOM_VAR) === next) return;
-    if (next) root.style.setProperty(ZOOM_VAR, next);
-    else root.style.removeProperty(ZOOM_VAR);
-  };
-
-  const fit = () => {
-    // Detail pages carry masonries too (a model's gallery and Suggested
-    // Resources), and so do search, collections and storylines — where a zoom
-    // shrank the page or overlapped the cards. Only the two feed families fit.
-    // /models is NOT fitted any more (2026-11-26). Its virtualiser MEASURES each
-    // row's rendered height and reuses it as a local translate, so under a zoom
-    // of z it lays rows out at h*z + 16 while they draw h tall: measured at
-    // z 1.111, row pitch 473 vs stock 427, a 61px gap between rows against
-    // stock's 16. No CSS can undo that — any ancestor zoom or scale inflates the
-    // measurement — so /models keeps the site's own geometry. The image and
-    // video feeds compute their heights instead of measuring them, which is why
-    // they fit cleanly (8px everywhere, measured the same day).
-    if (routeNow !== 'media') return setZoom(0);
-    const feed = document.querySelector(FEED);
-    const host = feed && feed.closest(HOST);
-    const box = feed && feed.parentElement;
-    if (!feed || !host || !box) return setZoom(0); // not a feed page → stock
-    const combined = parseFloat(feed.style.width);
-    // No width yet (first mount, or the single-column layout under 672px):
-    // keep whatever is set rather than flashing to stock and back.
-    if (!Number.isFinite(combined)) return;
-    // The site's own declaration doubles as the drift check: (320·k + 16·(k−1)
-    // + 16) / 336 is an integer only while COL and GAP still hold. Anything
-    // else means the site retuned its masonry — degrade to stock, never guess.
-    if (!Number.isInteger((combined + SITE_GAP) / SITE_PITCH)) return setZoom(0);
-    const cs = window.getComputedStyle(box);
-    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-    // Bounding rects are in real (zoomed) px; computed padding is in the box's
-    // own (unzoomed) px. R is therefore the width the box fills whatever the
-    // zoom, and the one number every candidate is derived from.
-    const R = box.getBoundingClientRect().width;
-    if (!(R > 0)) return;
-    const stock = Math.min(Math.floor((R - pad + SITE_GAP) / SITE_PITCH), MAX_COLS);
-    // Exactly k columns fill R when the box measures k·PITCH − GAP + pad of its
-    // own px. The −1 keeps float rounding from landing the site on k − 1: the
-    // block ends up 1 real px short of the box, never 1 px over.
-    // The SITE's pitch, not ours. It reserves 336px per column whatever CSS
-    // renders, so sizing the box to our tighter 328 asks it for a column count
-    // it will never choose: measured 2026-09-07 on /models, the box came out
-    // 1633px, the site still picked 4 columns and stamped a 1328px feed inside
-    // it, and the 305px left over showed up as 172px margins down both sides.
-    const zoomFor = (k) => (R - 1) / (k * SITE_PITCH - SITE_GAP + pad);
-    const ok = (k) => k >= 1 && k <= MAX_COLS && zoomFor(k) >= ZOOM_MIN && zoomFor(k) <= ZOOM_MAX;
-    const order = DENSITY === 'more' ? [stock + 1, stock]
-      : DENSITY === 'fewer' ? [stock, stock + 1]
-        : [stock, stock + 1].sort((a, b) => Math.abs(Math.log(zoomFor(a))) - Math.abs(Math.log(zoomFor(b))));
-    const k = order.find(ok);
-    setZoom(k ? zoomFor(k) : 0);
-  };
+  // ── Rejected: the width-fit zoom (rule 14, 2.0.x–2.1.0) ────────────────────
+  // The feed used to be fitted to the window with a CSS zoom on `main`, sized
+  // so the site's own 320px-column math landed on a block that filled the width.
+  // It is gone, for a reason that is not obvious and was measured twice:
+  // Civitai's virtualisers compute positions in their own px while the browser
+  // renders them zoomed, so any zoom other than 1 desynchronises them.
+  //   · /models measures rendered row heights: rows 61px apart, stock 16.
+  //   · /images and /videos decide which cards to mount from the scroll
+  //     position: at zoom 0.8994, a 50-jump scroll of the feed unmounted 21
+  //     cards WHILE THEY WERE ON SCREEN; forced to zoom 1, the same run
+  //     unmounted 0 (2026-11-26, signed out, 1512px). That is the "images
+  //     appear, disappear, appear again" the operator reported while dragging
+  //     the scrollbar.
+  // And the zoom turned out not to be what fills the width: rule 12's flexing
+  // columns already do, unzoomed — 4 columns of 368px with 8px edges at 1512,
+  // and the cards keep their aspect closely enough that the media is cropped
+  // 0-1% (one card of seven: 9%). Do not bring a zoom or a transform scale back
+  // without solving the virtualiser first; it is the same fight as rule 12b.
+  const FEED = ':is([class*="MasonryContainer-module"], [class*="_queries"])';
 
   // Coalesce a mutation burst into one sweep per frame.
   //
@@ -1721,7 +1650,6 @@
     if (footerHome && !document.querySelector(FOOTER)) goHome(footerHome);
     footerHome = null;
 
-    root.style.removeProperty(ZOOM_VAR);
     dropSheet();
     delete window[TEARDOWN];
   };
