@@ -539,9 +539,9 @@
           year = "2026";
           holder = "Ismail Kattakath";
         };
-        # The repo's own .editorconfig stays: it carries the [*.user.js] line-length rule
-        # that the kit's baseline has no knob for.
-        editorconfig.enable = false;
+        # Userscripts are read in a diff and in Greasy Fork's code viewer, neither of
+        # which wraps: keep lines short (the hard cap, 500 characters, is CI's gate).
+        editorconfig.settings."*.user.js".max_line_length = 100;
       };
 
       perSystem =
