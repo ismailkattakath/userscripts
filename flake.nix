@@ -3,6 +3,7 @@
 #   nix develop              → shell with node, the pinned ESLint stack, gh, jq, shellcheck
 #   nix flake check          → every gate CI enforces, run hermetically
 #   nix run .#toolkit        → list every command
+#   nix run .#write-files    → regenerate LICENSE, .envrc, devcontainer.json (repo-kit)
 #
 # WHY A FLAKE AT ALL, in a repository whose whole point is that there is no build.
 # Nothing here compiles a userscript and nothing ever will — a manager copies the
@@ -38,19 +39,20 @@
   description = "Userscripts — pinned dev shell, publish gates and release toolkit";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # The fleet's shared repo shape (kattakath/nix-config ADR-016): devShell from one
+    # package list, treefmt, and the generated LICENSE/.envrc/devcontainer with drift checks.
+    repo-kit.url = "github:ismailkattakath/repo-kit";
+    nixpkgs.follows = "repo-kit/nixpkgs";
+    flake-parts.follows = "repo-kit/flake-parts";
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-    }:
+    inputs@{ flake-parts, repo-kit, ... }:
     let
-      inherit (nixpkgs) lib;
+      inherit (inputs.nixpkgs) lib;
 
       # `x86_64-darwin` is DELIBERATELY ABSENT. nixpkgs-unstable THROWS on that platform
-      # since the 26.11 cycle, and because `forAll` is a genAttrs fold the throw happens on
+      # since the 26.11 cycle, and because every output is a genAttrs fold over this list the throw happens on
       # EVALUATION — so listing it took down the WHOLE flake, not one platform, and
       # `--no-build` did not avoid it. Measured 2026-10-02. Upstream directs x86_64 Macs to
       # the `nixpkgs-26.05-darwin` branch instead:
@@ -60,7 +62,6 @@
         "aarch64-linux"
         "x86_64-linux"
       ];
-      forAll = f: lib.genAttrs systems (system: f system nixpkgs.legacyPackages.${system});
 
       owner = "ismailkattakath";
       repo = "userscripts";
@@ -120,12 +121,10 @@
             "package-lock.json"
           ];
       };
-    in
-    {
-      formatter = forAll (_: pkgs: pkgs.nixfmt);
 
-      packages = forAll (
-        system: pkgs:
+      # The OPERATIONS (lint, bump, preflight): packages, apps and checks all read this set.
+      mkCmds =
+        pkgs:
         let
           # Node 22, not 20: see reason 2 in the header. Not 24 either — 22 is the
           # conservative Active LTS and the repository's package.json says >=20.
@@ -527,30 +526,44 @@
               EOF
             '';
           };
-        }
-      );
+        };
+    in
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ repo-kit.flakeModules.default ];
+      inherit systems;
 
-      apps = forAll (
-        system: _:
-        lib.mapAttrs (name: drv: {
-          type = "app";
-          program = "${drv}/bin/${name}";
-        }) self.packages.${system}
-      );
+      repoKit = {
+        name = "userscripts";
+        license = {
+          spdx = "MIT";
+          year = "2026";
+          holder = "Ismail Kattakath";
+        };
+        # The repo's own .editorconfig stays: it carries the [*.user.js] line-length rule
+        # that the kit's baseline has no knob for.
+        editorconfig.enable = false;
+      };
 
-      devShells = forAll (
-        system: pkgs:
+      perSystem =
+        { pkgs, ... }:
         let
+          cmds = mkCmds pkgs;
           nodejs = pkgs.nodejs_22;
           nodeModules = pkgs.importNpmLock.buildNodeModules {
             inherit nodejs;
             npmRoot = npmRoot;
           };
-          cmds = lib.attrValues self.packages.${system};
         in
         {
-          default = pkgs.mkShell {
-            packages = [
+          packages = cmds;
+
+          apps = lib.mapAttrs (name: drv: {
+            type = "app";
+            program = "${drv}/bin/${name}";
+          }) cmds;
+
+          repoKit = {
+            devPackages = [
               nodejs
               pkgs.git
               pkgs.gh
@@ -558,8 +571,16 @@
               pkgs.shellcheck
               pkgs.nixfmt
             ]
-            ++ cmds;
-
+            ++ lib.attrValues cmds;
+            requiredBins = [
+              "node"
+              "npm"
+              "git"
+              "gh"
+              "jq"
+              "shellcheck"
+              "nixfmt"
+            ];
             shellHook = ''
               # Link the pinned dependency tree next to eslint.config.mjs. ESM
               # import does not honour NODE_PATH, so the plugin the config imports
@@ -573,57 +594,46 @@
               echo "commands: nix run .#toolkit   (or just run them: gates, lint-fix, bump, preflight)"
             '';
           };
-        }
-      );
 
-      # `nix flake check` = the CI gates, hermetically, PLUS every command built
-      # (writeShellApplication runs shellcheck at build time, so a broken command
-      # fails the flake check rather than the operator's afternoon).
-      checks = forAll (
-        system: pkgs:
-        let
-          nodejs = pkgs.nodejs_22;
-          nodeModules = pkgs.importNpmLock.buildNodeModules {
-            inherit nodejs;
-            npmRoot = npmRoot;
+          # `nix flake check` = the CI gates, hermetically, PLUS every command built
+          # (writeShellApplication runs shellcheck at build time, so a broken command
+          # fails the flake check rather than the operator's afternoon), PLUS the kit's
+          # treefmt, toolchain-complete and generated-file drift checks.
+          checks = cmds // {
+            gate-eslint = pkgs.runCommand "gate-eslint" { nativeBuildInputs = [ nodejs ]; } ''
+              cp -r ${cleanSrc}/. work
+              chmod -R u+w work
+              cd work
+              ln -sfn ${nodeModules}/node_modules node_modules
+              ./node_modules/.bin/eslint .
+              touch $out
+            '';
+
+            gate-meta = pkgs.runCommand "gate-meta" { nativeBuildInputs = [ nodejs ]; } ''
+              cp -r ${cleanSrc}/. work
+              chmod -R u+w work
+              cd work
+              node scripts/meta-lint.mjs
+              touch $out
+            '';
+
+            gate-parse = pkgs.runCommand "gate-parse" { nativeBuildInputs = [ nodejs ]; } ''
+              cd ${cleanSrc}
+              n=0
+              for f in *.user.js; do
+                echo "parsing $f"
+                node --check "$f"
+                n=$((n + 1))
+              done
+              [ "$n" -gt 0 ] || { echo "no .user.js files — the source filter is wrong" >&2; exit 1; }
+              touch $out
+            '';
+
+            gate-nixfmt = pkgs.runCommand "gate-nixfmt" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
+              nixfmt --check ${./flake.nix}
+              touch $out
+            '';
           };
-        in
-        self.packages.${system}
-        // {
-          gate-eslint = pkgs.runCommand "gate-eslint" { nativeBuildInputs = [ nodejs ]; } ''
-            cp -r ${cleanSrc}/. work
-            chmod -R u+w work
-            cd work
-            ln -sfn ${nodeModules}/node_modules node_modules
-            ./node_modules/.bin/eslint .
-            touch $out
-          '';
-
-          gate-meta = pkgs.runCommand "gate-meta" { nativeBuildInputs = [ nodejs ]; } ''
-            cp -r ${cleanSrc}/. work
-            chmod -R u+w work
-            cd work
-            node scripts/meta-lint.mjs
-            touch $out
-          '';
-
-          gate-parse = pkgs.runCommand "gate-parse" { nativeBuildInputs = [ nodejs ]; } ''
-            cd ${cleanSrc}
-            n=0
-            for f in *.user.js; do
-              echo "parsing $f"
-              node --check "$f"
-              n=$((n + 1))
-            done
-            [ "$n" -gt 0 ] || { echo "no .user.js files — the source filter is wrong" >&2; exit 1; }
-            touch $out
-          '';
-
-          gate-nixfmt = pkgs.runCommand "gate-nixfmt" { nativeBuildInputs = [ pkgs.nixfmt ]; } ''
-            nixfmt --check ${./flake.nix}
-            touch $out
-          '';
-        }
-      );
+        };
     };
 }

@@ -32,7 +32,7 @@ jobs:
   # give it a `name:`.
   gate:
     if: ${{ !cancelled() }}
-    needs: [lint, parse]
+    needs: [lint, parse, flake-check]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -43,7 +43,8 @@ jobs:
           needs: ${{ toJSON(needs) }}
           expect: >-
             {"lint": ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true' }},
-             "parse": ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true' }}}
+             "parse": ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository || vars.QUEUE_ENABLED != 'true' }},
+             "flake-check": true}
 
   lint:
     name: eslint + meta
@@ -95,3 +96,25 @@ jobs:
             echo "parsing $f"
             node --check "$f"
           done
+
+  # repo-kit's flake-check job (ismailkattakath/repo-kit .github/workflows/ci.yml), same
+  # pinned actions: every flake check on both Linux arches — the hermetic gates above, the
+  # devShell's toolchain, treefmt, and each generated file's drift check (files:<path>).
+  # Runs on every event, so `expect` holds a plain `true` for it.
+  flake-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04-arm, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: nix flake check
+        run: nix flake check --print-build-logs

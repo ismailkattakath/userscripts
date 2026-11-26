@@ -19,3 +19,7 @@ Thumbs.db
 # There is NO build output in this repository. If you find yourself adding a
 # dist/ ignore, stop and open an issue first — a build step changes what a
 # reviewer is reading relative to what a user executes.
+
+# direnv (the generated .envrc); .envrc.local holds per-machine variables
+.direnv/
+.envrc.local

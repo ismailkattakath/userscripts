@@ -89,7 +89,7 @@ trap that has bitten this project more than once.
 - 🐛 [Report a bug](https://github.com/ismailkattakath/userscripts/issues/new?template=bug_report.yml)
 - ✨ [Request a script](https://github.com/ismailkattakath/userscripts/issues/new?template=script_request.yml)
 - 🔒 [Report a security issue](SECURITY.md) — **not** via a public issue
-- 📜 [Code of Conduct](CODE_OF_CONDUCT.md)
+- 📜 [Code of Conduct](https://github.com/ismailkattakath/.github/blob/main/.github/CODE_OF_CONDUCT.md) (the owner-wide default)
 
 ## Licence
 
