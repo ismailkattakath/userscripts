@@ -15,4 +15,4 @@ permissions:
   issues: write
 jobs:
   sync:
-    uses: kattakath/.github/.github/workflows/status-labels.yml@3d5ad5b9e04c853dbb0d82446255c9ef9230332a
+    uses: kattakath/.github/.github/workflows/status-labels.yml@3a1a3c59c92aa76e77d52e52313499182feb4864 # v1.0.0

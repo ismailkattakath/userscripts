@@ -38,7 +38,7 @@ jobs:
     steps:
       # `expect` holds a deliberate SECOND copy of the heavy jobs' `if:`. If the two
       # copies drift, gate goes red, so a bad edit fails closed.
-      - uses: kattakath/.github/actions/gate@3d5ad5b9e04c853dbb0d82446255c9ef9230332a
+      - uses: kattakath/.github/actions/gate@3a1a3c59c92aa76e77d52e52313499182feb4864 # v1.0.0
         with:
           needs: ${{ toJSON(needs) }}
           expect: >-
@@ -102,4 +102,4 @@ jobs:
   # toolchain, treefmt, and each generated file's drift check (files:<path>). Runs on
   # every event, so `expect` holds a plain `true` for it.
   flake-check:
-    uses: kattakath/.github/.github/workflows/nix-flake-check.yml@cad98392a903fd89ec732ea116f38ec871e38ac0 # main
+    uses: kattakath/.github/.github/workflows/nix-flake-check.yml@3a1a3c59c92aa76e77d52e52313499182feb4864 # v1.0.0

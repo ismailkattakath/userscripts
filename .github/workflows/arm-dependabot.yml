@@ -16,7 +16,7 @@ permissions:
   pull-requests: read
 jobs:
   arm:
-    uses: kattakath/.github/.github/workflows/arm-dependabot.yml@3d5ad5b9e04c853dbb0d82446255c9ef9230332a
+    uses: kattakath/.github/.github/workflows/arm-dependabot.yml@3a1a3c59c92aa76e77d52e52313499182feb4864 # v1.0.0
     with:
       client-id: ${{ vars.CI_BOT_CLIENT_ID }}
     secrets:
