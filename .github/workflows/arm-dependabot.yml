@@ -1,7 +1,9 @@
 name: arm-dependabot
 
 # Thin caller of the shared kattakath/.github arm-dependabot workflow: arms
-# auto-merge on open Dependabot PRs from a schedule. A Dependabot-triggered run
+# auto-merge on open Dependabot PRs from a schedule, or (since v1.0.2) merges one
+# directly when it is already CLEAN, since this personal-account repo has no
+# merge queue and GitHub refuses to arm a clean PR. A Dependabot-triggered run
 # gets only Dependabot secrets, so the CI App key is unreachable there; a
 # scheduled run keeps Actions secrets.
 on:
@@ -16,7 +18,7 @@ permissions:
   pull-requests: read
 jobs:
   arm:
-    uses: kattakath/.github/.github/workflows/arm-dependabot.yml@3a1a3c59c92aa76e77d52e52313499182feb4864 # v1.0.0
+    uses: kattakath/.github/.github/workflows/arm-dependabot.yml@a605631adbddd3bc935eda81ff2107f3616b40c6 # v1.0.2
     with:
       client-id: ${{ vars.CI_BOT_CLIENT_ID }}
     secrets:
