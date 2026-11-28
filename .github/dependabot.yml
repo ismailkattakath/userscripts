@@ -7,6 +7,10 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    # Same 7-day supply-chain hold as the actions entry below: zizmor's
+    # `dependabot-cooldown` rule checks every update entry, not one ecosystem.
+    cooldown:
+      default-days: 7
     groups:
       lint-tooling:
         patterns:
@@ -15,9 +19,21 @@ updates:
     commit-message:
       prefix: 'deps'
 
+  # Fleet shape (nix-config's .github/dependabot.yml): weekly, every action in
+  # ONE grouped PR, and a 7-day cooldown, so a compromised release yanked within
+  # a week never becomes a SHA this repo pins. "/" covers .github/workflows; this
+  # repo has no composite action of its own that would need its own directory.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    # Kept: this repo's subjects are `<area>: …` (ci:, deps:, docs:), so the
+    # prefix renders Dependabot's subject as `ci: bump …` like every other commit.
     commit-message:
       prefix: 'ci'
