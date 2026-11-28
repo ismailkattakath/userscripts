@@ -561,6 +561,29 @@
         # Userscripts are read in a diff and in Greasy Fork's code viewer, neither of
         # which wraps: keep lines short (the hard cap, 500 characters, is CI's gate).
         editorconfig.settings."*.user.js".max_line_length = 100;
+        # .github/dependabot.yml comes from repo-kit's one generator: the fleet's
+        # github-actions entry (weekly, one group, 7-day cooldown) plus npm. Both keep
+        # a prefix because this repo's subjects are `<area>: …` (ci:, deps:, docs:).
+        dependabot = {
+          enable = true;
+          githubActions.settings.commit-message.prefix = "ci";
+          # devDependencies only — this repo ships no runtime dependency. Grouped
+          # monthly so a two-line lint bump does not cost a review each time; the
+          # generator adds the 7-day cooldown.
+          updates = [
+            {
+              package-ecosystem = "npm";
+              directory = "/";
+              schedule.interval = "monthly";
+              open-pull-requests-limit = 3;
+              groups.lint-tooling.patterns = [
+                "eslint"
+                "eslint-*"
+              ];
+              commit-message.prefix = "deps";
+            }
+          ];
+        };
       };
 
       perSystem =

@@ -62,11 +62,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1795702321,
-        "narHash": "sha256-vADKZKdrbXmrRD2yAsVQb45uKHDVJvn55qBoQCJfSek=",
+        "lastModified": 1795887818,
+        "narHash": "sha256-qdq7F6OdM3dbfmH942bBOjSRZWQBiBMMIheH6819XgQ=",
         "owner": "ismailkattakath",
         "repo": "repo-kit",
-        "rev": "93a961c5f8b41717a3c08c20b0ce51c36ba5b3ce",
+        "rev": "9b538d23429b999324d5705022b8a6e2a852d6a9",
         "type": "github"
       },
       "original": {
